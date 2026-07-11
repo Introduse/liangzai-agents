@@ -1,58 +1,91 @@
-# Liang Zai — agents (Claude plugin marketplace)
+# Liang Zai — agents
 
-Back-office agents for [Liang Zai Prawn Noodle](https://liangzai.example), built by
-[Five Bucks Ventures](https://fivebucksventures.com). They run inside the owner's own Claude
-Cowork project and keep his supplier costs honest.
+A **Claude plugin** for Liang Zai Prawn Noodle's back-office: capture supplier invoices and
+Loyverse sales, reconcile each month's Statements of Account line-by-line, and track supplier
+cost per bowl. The skills run inside the owner's own Claude Cowork project and drive the
+private [liangzai-gateway](https://github.com/Introduse/liangzai-gateway) MCP server, which
+holds every credential and does all the Sheet/Loyverse/Gmail work.
 
-**Nothing is ever paid automatically.** The agents log, reconcile, and calculate. Every
-flagged item and every payment goes through the owner — there is no `Approved` and no `Paid`
-status the agent can set.
+Built by [Five Bucks Ventures](https://fivebucksventures.com).
 
-## What this repo is
+> **Status (v0.4.0):** Plugin marketplace with four skills and the agent. Client-neutral.
+> Requires the gateway deployed and registered as a Cowork custom connector (set the URL in
+> `plugins/liangzai/.mcp.json`).
 
-This is the **plugin marketplace**. The agents' logic — the reconciliation engine, the
-GST-aware capture guards, the cost-per-bowl math, and every Google/Loyverse/Sheets call —
-lives server-side in the private **liangzai-gateway** (a remote MCP server), where the
-credentials are held and never leave. The skills here call its `liangzai_*` tools.
+**Nothing is ever paid automatically.** The agents log, reconcile, and calculate — there is
+no `Approved` and no `Paid` status the agent can set. Every flagged item and every payment
+goes through the owner.
+
+---
+
+## Architecture
 
 ```
-liangzai-agents (this repo — the plugin)        liangzai-gateway (remote MCP, Vercel)
-  skills drive the workflow, extract invoice ──▶  liangzai_* tools:
-  PDFs, and call the gateway                        reconcile · capture_sales ·
-  download_invoices.py runs LOCALLY                 append_invoice_log · compute_cost ·
-  (the Gmail connector can't fetch                  send_summary · init_sheet · …
-   attachment bytes)                                → Google Sheets (source of truth)
+liangzai-agents (THIS REPO — the plugin)         liangzai-gateway (remote MCP, Vercel)
+  skills drive the workflow; Claude       ──MCP──▶  liangzai_* tools:
+  extracts invoice PDFs and calls                     reconcile · capture_sales ·
+  the gateway                                         append_invoice_log · compute_cost ·
+  download_invoices.py runs LOCALLY                   send_summary · init_sheet · …
+  (the Gmail connector can't fetch                    → Google Sheets (source of truth)
+   attachment bytes)
 ```
 
-Only two scripts run locally, on the owner's machine: `download_invoices.py` (the Gmail
-connector cannot fetch attachment bytes, and Claude reads the PDFs to extract line items)
-and `google_oauth.py` (one-time consent to mint the Google refresh token).
+Only two scripts run locally, on the owner's machine: `download_invoices.py` (Claude reads
+the downloaded PDFs to extract line items) and `google_oauth.py` (one-time consent to mint
+the Google refresh token). Everything else — reconciliation, cost math, all Sheet/Loyverse/
+Gmail calls — happens in the gateway, where the credentials live and never leave.
+
+## The skills
+
+| Skill | Does |
+|---|---|
+| `liangzai-setup` | First-run onboarding: connect the gateway, mint the local Google token, create the Sheet, confirm the bowl definition, and embed the agent into the workspace `CLAUDE.md` |
+| `supplier-invoice-manager` | **Weekly** — download + extract invoices → `liangzai_append_invoice_log`. **Monthly** — extract statements, `liangzai_run_reconciliation`, `liangzai_send_summary` |
+| `cost-optimizer` | **Weekly** — `liangzai_capture_sales`. **Monthly** — `liangzai_compute_cost_per_bowl` |
+| `plugin-update` | Idempotent catch-up after an upgrade — detects gaps (connector, token, tabs, outlet map, bowl definition, CLAUDE.md embed) and fills only what's missing |
+
+`agents/liangzai.md` defines the agent identity; `liangzai-setup` embeds it into the
+workspace `CLAUDE.md` so every session — including scheduled runs — auto-loads it.
+
+## What the guarantees are
+
+- **Any variance flags.** `Matched` requires the variance to be exactly zero (compared as
+  integer cents, so float noise never manufactures a phantom variance). A missing statement
+  is `SOA_MISSING`, never agreement.
+- **Never guess.** An unresolved supplier or an ambiguous outlet becomes `needs_review` — a
+  mis-attributed outlet corrupts that outlet's cost-per-bowl while the totals still reconcile.
+- **The owner owns approval.** The agent sets a default payment status once and preserves his
+  choice on every re-run; it can never set `Paid`.
+- **Cost per bowl is honest.** It covers only the tracked (automated) suppliers, names them
+  in `tracked_suppliers`, exposes partial-month coverage in `days_covered`, and is withheld
+  entirely until the bowl definition is confirmed.
 
 ## Structure
 
 ```
 .claude-plugin/marketplace.json     # the marketplace manifest
 plugins/liangzai/
-  ├── .claude-plugin/plugin.json    # userConfig.gateway_api_key
+  ├── .claude-plugin/plugin.json    # userConfig.gateway_api_key (sensitive)
   ├── .mcp.json                     # the gateway connector URL
-  ├── agents/liangzai.md
-  ├── skills/{liangzai-setup, supplier-invoice-manager, cost-optimizer}/
+  ├── agents/liangzai.md            # agent identity (embedded into CLAUDE.md by setup)
+  ├── skills/{liangzai-setup, supplier-invoice-manager, cost-optimizer, plugin-update}/
   └── scripts/                      # local-only: download_invoices.py, google_oauth.py
 ```
 
-## The two agents
+## Install
 
-**Supplier Invoice Manager** — weekly, captures the shared supplier inbox into the tracking
-Sheet by outlet; monthly, reconciles each Statement of Account line-by-line. No tolerance: a
-row is `Matched` only when the variance is exactly zero.
+1. Add this repo as a plugin marketplace in Claude, then install the **liangzai** plugin.
+2. Paste the gateway API key (`liangzai_live_…`) when prompted for `gateway_api_key`.
+3. Run **`/liangzai-setup`** and follow it end to end — it walks through the gateway
+   connector, Google access, the Sheet, the bowl definition, and the workspace `CLAUDE.md`.
 
-**Cost Optimizer** — weekly, records Loyverse sales per item per outlet per day; monthly,
-tallies bowls and pairs each outlet's bowls with its reconciled supplier cost. Loyverse's
-free plan refuses receipts older than 31 days, so sales accumulate forward — every read stays
-inside the 30-day window, permanently, on the free plan.
+The 30-day Loyverse note, in one line: the free plan refuses receipts older than 31 days, so
+sales accumulate forward — the weekly run records what it can see, the monthly run tallies it,
+and every read stays inside the window.
 
-## History
+## The gateway
 
-The full Python implementation this system grew from is preserved at git tag
-`python-source-final`. The TypeScript gateway was proven bit-exact against it by a
-differential harness (340k+ cases) before the Python was retired.
+All the logic and credentials live in the private
+[liangzai-gateway](https://github.com/Introduse/liangzai-gateway) — a Next.js + `mcp-handler`
+MCP server on Vercel. Deploy it, set its env vars, register `https://<app>.vercel.app/api/mcp`
+as a Cowork custom connector, and put that URL in `plugins/liangzai/.mcp.json`.

@@ -127,7 +127,7 @@ system working. The owner is the filter.
 ### 3. Send the summary
 
 > Call **`liangzai_send_summary`** with `{ month: "2026-06", preview: true }` and show
-> The owner the result first. Then call it again with `preview: false` to send.
+> the owner the result first. Then call it again with `preview: false` to send.
 
 Flagged and needs-review rows lead; matched follow. The footer states, in both
 languages, that nothing has been approved or paid. The gateway refuses any recipient
@@ -146,7 +146,7 @@ The gateway writes a default only when a row is created (`Ready for Payment` for
 clean match, `Under Review` otherwise) and **preserves his choice** on every later run.
 The one exception: if a late SOA changes the figures under a row he already approved,
 it resets to `Under Review` and says so. The agent can never set `已付款 Paid` — only
-The owner can, after paying his bank.
+the owner can, after paying his bank.
 
 ---
 

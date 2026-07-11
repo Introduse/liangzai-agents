@@ -1,5 +1,5 @@
 // Version information (production)
-const DEFAULT_VERSION = 'v0.4.0';
+const DEFAULT_VERSION = 'v0.4.1';
 const DEFAULT_DATE = 'Jul 11, 2026';
 
 // Export constants initially with default values
@@ -9,6 +9,13 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.4.1',
+    date: 'Jul 11, 2026',
+    changes: [
+      'Rewrote the README in the gateway house pattern (status line, architecture, skills table, guarantees, install, gateway link). Fixed a few over-capitalised "the owner" mid-sentence artifacts from the client-scrub pass.',
+    ],
+  },
   {
     version: 'v0.4.0',
     date: 'Jul 11, 2026',

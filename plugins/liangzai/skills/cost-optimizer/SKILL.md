@@ -52,7 +52,7 @@ monthly run only tallies what is already stored. Three consequences, all load-be
 
 The gateway buckets by **Singapore date**, not UTC, and is idempotent on
 `{outlet}|{date}|{item_id}|{variant}`. If it warns that days are unreachable, tell
-The owner immediately — that data is gone.
+the owner immediately — that data is gone.
 
 ## What counts as a bowl
 
