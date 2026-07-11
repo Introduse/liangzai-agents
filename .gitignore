@@ -1,0 +1,34 @@
+# Secrets — never commit
+.env.local
+.env
+.env.*.local
+secrets/
+
+# Downloaded supplier invoices and SOAs.
+# These carry supplier pricing and contact details. They land here only long
+# enough for the agent to read them.
+cache/
+
+# local agent / editor config
+.claude/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# logs
+*.log
+
+# os
+.DS_Store
+
+# Client business data + internal notes — never publish (this repo is public).
+# Live in ../_internal/ instead.
+docs/bowl_checklist.*
+docs/_audit.md
+docs/SOA_FORMAT_NOTES.md
+
+# dev fixtures — mock invoices/SOAs, not for publication
+fixtures/
