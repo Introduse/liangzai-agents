@@ -267,19 +267,31 @@ The test in one line: **would a customer call this "a bowl of noodles I bought f
 If it is a meal, it counts. If it rides along with a meal, it does not.
 
 > Call **`liangzai_bowl_checklist`** with `last_days: 30`. It returns **`dishes`** — one row
-> per real dish, already collapsed across all six stalls. Classify each `dish` with the rule
-> above, then call **`liangzai_set_bowl_definition`** with **every `item_id` from each bowl
-> dish's `item_ids`** flattened into `bowl_items`, the rest into `excluded_items`,
-> `confirmed_by_owner: true`, and a `version` like `v1-2026-07`.
+> per real dish, already collapsed across all six stalls, each with a short **`ref`** like
+> `d001`. Classify each `dish` with the rule above, then call
+> **`liangzai_set_bowl_definition`** with the **`bowl_refs`** of the bowl dishes, the rest in
+> `excluded_refs`, `confirmed_by_owner: true`, and a `version` like `v1-2026-07`.
 
-**Classify the dish; submit all of its IDs.** The same bowl of noodles is a *different*
-Loyverse `item_id` at each stall, and is spelled differently too (`001. Big Prawn Noodle`,
-`01. Big Prawn Noodle`, `001.Big Prawn Noodle`). That is why the tool hands you `item_ids`
-as a list — take the whole list. Tick a dish but submit only one stall's ID and that
-outlet's bowls silently vanish from the count forever, and its cost per bowl comes out too
-high while looking perfectly reasonable.
+**You classify dishes and submit refs. You never touch a Loyverse ID.** The same bowl of
+noodles is a *different* ID at each stall, spelled differently too (`001. Big Prawn Noodle`,
+`01. Big Prawn Noodle`, `001.Big Prawn Noodle`). The gateway knows every ID behind each
+dish and expands the ref itself — which is the whole point: it cannot be got wrong, and the
+IDs never enter the conversation (they were costing ~28,000 tokens a run for nothing).
 
-The owner never sees an ID. He confirms dish names; the IDs are an internal join key.
+**Classify against the list you were just given.** A ref is a handle into *that* checklist,
+not a permanent name. If you re-run `liangzai_bowl_checklist`, classify against the fresh
+list — refs from an older run may point somewhere else. Passing an unknown ref is an error,
+not a silent skip, and it will tell you to re-run.
+
+Two things worth reading on the returned rows:
+
+- **`names`** appears only when one dish was sold under more than one spelling. Glance at
+  it: if the spellings in a single row are clearly *different dishes*, the grouping is
+  wrong — say so rather than classifying it.
+- **`ids`** and **`outlets`** are counts, not lists. A bowl dish showing `outlets: 1` when
+  you'd expect all six is worth a second look.
+
+The owner never sees any of this. He confirms dish names.
 
 **Then show him the result as a finished thing, not a quiz.** One short message: *"I'm
 counting these N items as a bowl, and not counting these M (packaging, drinks, add-ons,

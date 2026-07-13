@@ -73,24 +73,38 @@ Two consequences that matter:
 
 ## The pipeline
 
-### 1. Classify — by dish, submit by ID
+### 1. Classify — by dish, submit by ref
 
 `liangzai_bowl_checklist` pulls the last 30 days of receipts across **all outlets** and
-returns them grouped into **dishes**. Each dish carries `item_ids`: *every* POS item ID
-the outlets sell that dish under.
+returns them grouped into **dishes**, each with a short **ref** (`d001`) and the three
+things the rule actually reads: the name, the variants, and the net quantity.
 
 Grouping strips what differs between stalls — the menu-number prefix, case, punctuation,
-spacing — and keys on what's left. The agent classifies the **dish**, then submits **all
-of its IDs** to `liangzai_set_bowl_definition`.
+spacing — and keys on what's left. The agent classifies the **dish** and submits its
+**ref** to `liangzai_set_bowl_definition`; the gateway expands each ref into *every* POS
+item ID behind that dish.
+
+**Nobody handles item IDs — not the owner, not the agent.** They are an internal join key,
+they are different at every outlet, and there is no version of this where a human or a
+model transcribing a list of UUIDs makes the count more correct. Keeping them server-side
+also keeps them out of the agent's context, where ~200 of them cost tens of thousands of
+tokens to carry around and do nothing.
+
+**The ref map is a snapshot, taken when the checklist is generated, and it is never
+recomputed at confirm time.** The 30-day window is a rolling one: receipts arrive between
+the moment the checklist is produced and the moment it is confirmed. If the grouping were
+re-derived on confirm, a ref could resolve to a different set of IDs than the one that was
+agreed to — and the definition would quietly stop meaning what it said. A ref that isn't in
+the saved snapshot is a hard error, never a silent omission: dropping one would remove that
+dish's bowls from the denominator, permanently and invisibly.
 
 The grouper is deliberately **conservative**. When it can't tell that two names are the
 same dish (an apostrophe, a genuinely different menu wording at one outlet), it leaves
 them as separate rows rather than merging them. That fails in the safe direction: an
 unmerged dish is still a visible row, and the agent classifies by meaning, not by string,
-so it still gets ticked. The dangerous failure is the opposite — merging a bowl with a
-non-bowl — and the grouping never does that.
-
-**The owner never sees an item ID.** He confirms dish names. IDs are an internal join key.
+so it still gets classified. The dangerous failure is the opposite — merging a bowl with a
+non-bowl — and the grouping never does that. When a row *did* merge more than one spelling,
+it carries them all, so an over-merge is visible rather than silent.
 
 ### 2. Record the weekly sales
 

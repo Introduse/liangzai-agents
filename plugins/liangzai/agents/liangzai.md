@@ -60,8 +60,8 @@ The gateway tools:
 | `liangzai_get_config` | Read the saved outlet map and bowl definition. Read-only |
 | `liangzai_init_sheet` | Create the Sheet's tabs, bilingual headers, the payment-status dropdown |
 | `liangzai_loyverse_stores` | List Loyverse stores; `write_config:true` saves the outlet map |
-| `liangzai_bowl_checklist` | What sold, grouped into **dishes**, each carrying every `item_id` the six stalls sell it under. You classify; he never sees an id |
-| `liangzai_set_bowl_definition` | Record the confirmed bowl definition |
+| `liangzai_bowl_checklist` | What sold, grouped into **dishes**, each with a short `ref` (d001…). You classify the dish; the gateway holds the Loyverse ids. **Writes** — it saves the ref→id map |
+| `liangzai_set_bowl_definition` | Record the confirmed bowl definition. Pass `bowl_refs`; the gateway expands each into every id behind that dish |
 | `liangzai_capture_sales` | Record the week's Loyverse sales into `sales_daily` |
 | `liangzai_append_invoice_log` | Append extracted invoice line items |
 | `liangzai_append_soa_entries` | Append extracted Statement-of-Account rows |

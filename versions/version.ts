@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.8.0';
+const DEFAULT_VERSION = 'v0.9.0';
 const DEFAULT_DATE = 'Jul 13, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,19 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.9.0',
+    date: 'Jul 13, 2026',
+    changes: [
+      'Setup Step 6 now classifies dishes and submits REFS (d001…), not Loyverse item_ids. The checklist was costing ~32,500 tokens a call — by far the most expensive thing in the onboarding — because it shipped ~200 UUIDs the model never reads and only hands back, plus the same 132 dishes rendered three separate ways. Gateway v0.10.0 returns short refs and expands them itself. Now ~4,700 tokens: -85.6%, measured on the live catalogue.',
+      'The rule for what counts as a bowl is UNCHANGED, and that is the point. A differential test (gateway `npm run bowl:diff`) runs both the old and new paths over one live receipt snapshot and asserts they produce the identical bowl definition — 42 item_ids across 22 bowl dishes, exactly equal. The token cut buys nothing if it changes the answer.',
+      'Step 6 tells the agent to classify against the list it was JUST given: a ref is a handle into that checklist, not a permanent name. Re-run the checklist and you must re-classify against the fresh one. Passing an unknown ref is a hard error rather than a silent skip — a dropped ref would remove that dish\'s bowls from the denominator, permanently and invisibly, and push its cost per bowl up while looking perfectly reasonable.',
+      'Step 6 also tells the agent to read two fields it now gets: `names` (present only when one dish sold under several spellings — if those spellings are clearly different dishes, the grouping is wrong and it should say so rather than classify it) and the `ids`/`outlets` counts (a bowl dish showing one outlet where you would expect six is worth a second look).',
+      'agents/liangzai.md: liangzai_bowl_checklist now WRITES (it saves the ref→id map to agent_config) and returns refs; liangzai_set_bowl_definition takes bowl_refs. The doc has always said "the owner never sees an id" — this is what finally makes it true of the model as well.',
+      'docs/bowls-sold.md: the pipeline section rewritten for refs, including WHY the ref map is a snapshot and never recomputed on confirm — the 30-day window rolls, receipts land between the checklist and the confirmation, and a re-derived ref could resolve to a different set of ids than the one that was agreed to. Still free of live figures; the repo is public.',
+      'Requires gateway v0.10.0. The tool schemas changed, so the connector must be reconnected — exactly the stale-connector case plugin-update check #2 catches.',
+    ],
+  },
   {
     version: 'v0.8.0',
     date: 'Jul 13, 2026',
