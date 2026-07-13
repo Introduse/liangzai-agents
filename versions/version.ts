@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.5.0';
+const DEFAULT_VERSION = 'v0.5.1';
 const DEFAULT_DATE = 'Jul 13, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,13 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.5.1',
+    date: 'Jul 13, 2026',
+    changes: [
+      'Setup Step 2 now gives the gateway URL literally (https://liangzai-gateway.vercel.app/api/mcp) instead of "the liangzai gateway address (ends in /api/mcp)". The address is fixed and already committed in .mcp.json, so the vague wording was a blank the owner — a hawker operator, not an engineer — had no way to fill in, and Step 2 blocks every later step.',
+    ],
+  },
   {
     version: 'v0.5.0',
     date: 'Jul 13, 2026',
