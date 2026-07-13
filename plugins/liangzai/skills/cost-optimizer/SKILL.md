@@ -59,12 +59,18 @@ the owner immediately — that data is gone.
 
 ## What counts as a bowl
 
-Loyverse has **no bowls-sold field.** The synthesis silently sets the headline number,
-so `liangzai_compute_cost_per_bowl` refuses to run until the bowl definition is
-confirmed. Do not work around that. To (re)generate the checklist and record his answer,
-use `liangzai_bowl_checklist` and `liangzai_set_bowl_definition` — see
-`/liangzai-setup` Step 6. Because `sales_daily` is item-level, changing the definition
-later re-derives history correctly instead of corrupting it.
+Loyverse has **no bowls-sold field**, so the definition is a rule we apply, not a question
+we put to the owner. **A meal counts; anything that rides along with a meal does not** —
+so noodle and rice dishes are bowls, while packaging charges, drinks, à la carte extras,
+sides, staff meals and fee/discount lines are not. The `$0.30` packaging line is the
+highest-volume item in the catalogue and counting it would roughly double the bowl count.
+The full rule and the exact call live in **`/liangzai-setup` Step 6** — follow it there,
+and don't re-litigate the classification with him.
+
+This choice silently sets the headline number, which is why
+`liangzai_compute_cost_per_bowl` refuses to run until `confirmed_by_owner` is true. Don't
+work around that. Because `sales_daily` is item-level, changing the definition later
+re-derives history correctly instead of corrupting it.
 
 ## Mode: monthly
 

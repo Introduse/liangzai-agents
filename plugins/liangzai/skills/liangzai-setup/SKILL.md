@@ -245,21 +245,50 @@ It must report **6 stores** matching the outlets. Fewer means the token is scope
 
 ## Step 6 — What counts as a bowl
 
-**This decides the number the owner actually cares about, and he must answer it himself.**
-Loyverse has no "bowls sold" field.
+Loyverse has no "bowls sold" field, so we have to decide which items are a bowl. **Do not
+put that question to the owner.** He sells noodles; he does not think in taxonomies, and
+asking him to rule on whether a side dish is "a bowl" invents a decision he never had.
 
-> Call **`liangzai_bowl_checklist`** with `last_days: 30`.
+**Apply this rule. It is the definition — not a starting point for a discussion.**
 
-It returns the distinct item names by net quantity (markdown). Show it and explain: the
-same dish is named differently per outlet, so we count by Loyverse **item ID** not name;
-and the highest-volume line item is a `$0.30` packaging charge, assumed **not** a bowl.
-Ask the judgement calls (is fried Hokkien mee a bowl? rice dishes? staff meals?), then:
+| Counts as a bowl | Does not count |
+|---|---|
+| Any noodle dish sold as a meal — prawn noodle (dry or soup), 大虾面, mee, kway teow, bee hoon, Hokkien mee, and every per-outlet spelling of them | Packaging and bag charges (the `$0.30` line — it is the highest-volume item in the catalogue and would roughly double the bowl count if counted) |
+| A rice dish sold as a meal, if he sells one | Drinks |
+| | À la carte add-ons and extras — extra prawns, extra egg, extra noodles, extra soup |
+| | Sides and snacks — toast, kaya, eggs sold alone |
+| | Staff meals, discounts, delivery/service fees, and anything with a zero or negative price |
 
-> Call **`liangzai_set_bowl_definition`** with the confirmed item IDs in `bowl_items`,
-> `confirmed_by_owner: true`, and a `version`.
+The test in one line: **would a customer call this "a bowl of noodles I bought for lunch"?**
+If it is a meal, it counts. If it rides along with a meal, it does not.
 
-Until that flag is true, `liangzai_compute_cost_per_bowl` refuses to publish a
-cost-per-bowl — by design.
+> Call **`liangzai_bowl_checklist`** with `last_days: 30`. It returns **`dishes`** — one row
+> per real dish, already collapsed across all six stalls. Classify each `dish` with the rule
+> above, then call **`liangzai_set_bowl_definition`** with **every `item_id` from each bowl
+> dish's `item_ids`** flattened into `bowl_items`, the rest into `excluded_items`,
+> `confirmed_by_owner: true`, and a `version` like `v1-2026-07`.
+
+**Classify the dish; submit all of its IDs.** The same bowl of noodles is a *different*
+Loyverse `item_id` at each stall, and is spelled differently too (`001. Big Prawn Noodle`,
+`01. Big Prawn Noodle`, `001.Big Prawn Noodle`). That is why the tool hands you `item_ids`
+as a list — take the whole list. Tick a dish but submit only one stall's ID and that
+outlet's bowls silently vanish from the count forever, and its cost per bowl comes out too
+high while looking perfectly reasonable.
+
+The owner never sees an ID. He confirms dish names; the IDs are an internal join key.
+
+**Then show him the result as a finished thing, not a quiz.** One short message: *"I'm
+counting these N items as a bowl, and not counting these M (packaging, drinks, add-ons,
+staff meals). Tell me if any of those look wrong."* He can correct it in a sentence, and
+that is the only input he should ever have to give. Re-run
+`liangzai_set_bowl_definition` with a new `version` if he does.
+
+Showing it is not optional, and it is why `confirmed_by_owner` exists: this single
+classification silently sets the headline number he will actually look at, and
+`liangzai_compute_cost_per_bowl` refuses to publish anything until the flag is true.
+Because `sales_daily` stores item-level quantities, changing the definition later
+re-derives history correctly instead of corrupting it — so a correction six months from
+now is cheap, and getting it wrong today is not permanent.
 
 ## Step 7 — The 30-day rule, explained once
 

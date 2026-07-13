@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.6.0';
+const DEFAULT_VERSION = 'v0.7.0';
 const DEFAULT_DATE = 'Jul 13, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,17 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.7.0',
+    date: 'Jul 13, 2026',
+    changes: [
+      'Setup Step 6 no longer interrogates the owner about what a bowl is. He sells noodles; he does not think in taxonomies, and asking him to rule on whether a side dish counts as "a bowl" invents a decision he never had. The rule is now HARDCODED in the skill — a meal is a bowl; packaging, drinks, à la carte add-ons, sides, staff meals and fee lines are not — and the agent applies it and shows him the finished classification once. He can correct it in a sentence; that is the only input he gives.',
+      'Step 6 now classifies DISHES and submits every item_id behind each one (needs gateway v0.8.0, which groups the checklist by dish). The same bowl of noodles is a different Loyverse item_id at each of the six stalls and is spelled differently too, so ticking a dish but submitting one stall\'s id makes that outlet\'s bowls vanish from the denominator forever — and its cost per bowl then reads too high while looking perfectly reasonable. The skill says this in those words.',
+      'Exclusions are checked BEFORE inclusions, and Step 6 says why: an "add noodles" side contains the word noodles and defeats any rule that only looks for noodle names. The packaging charge is the highest-volume line in the catalogue and would roughly double the bowl count if it slipped through.',
+      'cost-optimizer: "What counts as a bowl" rewritten to point at the rule rather than re-open the classification with the owner, and to note that `monthly` is step 2 of the monthly close, never its own scheduled task — compute_cost_per_bowl reads the reconciliation tab, so firing it independently could publish a plausible-looking cost against a stale or empty basis.',
+      'docs/bowls-sold.md (new): how bowls sold per outlet is determined — the two traps in real POS data (one dish, many item_ids; the packaging charge outselling every dish), the rule, the pipeline, the confirmation gate, and what the number is NOT (not "cost per bowl", never grossed up, and not a per-dish cost — the denominator splits by dish but the numerator does not). Written generically, with no figures or names from the live catalogue, since this repo is public.',
+    ],
+  },
   {
     version: 'v0.6.0',
     date: 'Jul 13, 2026',
