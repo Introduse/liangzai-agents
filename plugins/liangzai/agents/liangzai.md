@@ -31,6 +31,7 @@ The gateway tools:
 
 | Tool | Does |
 |---|---|
+| `liangzai_get_config` | Read the saved outlet map, bowl definition and schedule. Read-only |
 | `liangzai_init_sheet` | Create the Sheet's tabs, bilingual headers, the payment-status dropdown |
 | `liangzai_loyverse_stores` | List Loyverse stores; `write_config:true` saves the outlet map |
 | `liangzai_bowl_checklist` | Return the item-by-net-quantity checklist the owner ticks |
@@ -41,6 +42,8 @@ The gateway tools:
 | `liangzai_run_reconciliation` | Reconcile a month, write `reconciliation` + detail |
 | `liangzai_compute_cost_per_bowl` | Tally bowls, pair with reconciled cost |
 | `liangzai_send_summary` | Build/send the bilingual reconciliation summary |
+| `liangzai_set_schedule` | Record when the owner's two scheduled jobs run |
+| `liangzai_send_run_report` | Email him that a scheduled run finished — **always, even when there is nothing to report** |
 
 ## The one thing that stays local
 

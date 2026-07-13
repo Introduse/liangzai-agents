@@ -67,6 +67,12 @@ later re-derives history correctly instead of corrupting it.
 
 Run after reconciliation, so the cost basis is settled.
 
+**This mode is step 2 of the monthly close — it is never scheduled on its own.**
+`liangzai_compute_cost_per_bowl` reads the `reconciliation` tab, so a separate schedule
+could fire it before reconciliation had run and publish a cost per bowl against a stale or
+empty basis. It looks entirely plausible when that happens, which is what makes it
+dangerous. One task, in order: reconcile, then this. See `/liangzai-setup` Step 10.
+
 > Call **`liangzai_compute_cost_per_bowl`** with `{ month: "2026-07" }` (add `dry_run:
 > true` to preview).
 
@@ -88,3 +94,13 @@ Per outlet: bowls, reconciled cost, cost per bowl, and the move against last mon
 with any outlet whose cost per bowl rose. Say plainly when a number is withheld and why
 — unconfirmed definition, partial coverage, or unresolved variance. Never print a number
 you would have to caveat away in the next sentence.
+
+### When `capture-sales` ran on a schedule
+
+The weekly scheduled task runs `/supplier-invoice-manager capture` and then this. **That
+task sends one `liangzai_send_run_report` covering both** — fold your sales-capture counts
+into its `summary_lines`, and put any unreachable days into `needs_owner`, because those
+days are gone for good and he needs to know today, not at month end. Don't send a second
+email.
+
+`monthly` needs no report of its own: the monthly close ends with `liangzai_send_summary`.

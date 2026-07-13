@@ -1,5 +1,7 @@
 // Version information (production)
-const DEFAULT_VERSION = 'v0.4.2';
+// Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
+// .claude-plugin/marketplace.json — the skills read the manifest, not this file.
+const DEFAULT_VERSION = 'v0.5.0';
 const DEFAULT_DATE = 'Jul 13, 2026';
 
 // Export constants initially with default values
@@ -9,6 +11,21 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.5.0',
+    date: 'Jul 13, 2026',
+    changes: [
+      'Setup Step 10 is now an interview, not a hard-coded table. It asks the owner which weekday/time he wants the weekly capture and which day-of-month/time he wants the monthly close, records the answer with liangzai_set_schedule, and only then walks him through creating the two Cowork tasks. It refuses a monthly day below 5 (SOAs land by the 4th — reconciling earlier checks invoices against statements that have not arrived) and above 28 (no such day in February).',
+      'The monthly close is scheduled DAILY with a date guard on the first line of the prompt, because Cowork\'s frequency picker has no monthly option — only hourly, daily, weekly, weekdays, manual. The guard exits immediately on the other ~29 days. Removing it would run the close every single day.',
+      'Every scheduled run now emails the owner via liangzai_send_run_report, including the runs with nothing to report. Cowork tasks only fire while his machine is on, and Loyverse serves only 30 days of receipts, so a weekly capture that silently stops destroys that month\'s sales data — and a clean run looks exactly like a dead one from the outside. Step 10 tells him, in his words, that a missing email means something is wrong.',
+      'Cost-per-bowl is documented as step 2 of the monthly close and never its own scheduled task: it reads the reconciliation tab, so firing it independently could publish a plausible-looking cost against a stale or empty basis.',
+      'plugin-update gained a 6th check — Schedule — off the same single liangzai_get_config call. Any install predating this version has no schedule recorded and will now say so.',
+      'FIXED: setup Step 9a read the plugin version from versions/version.ts, which sits OUTSIDE plugins/liangzai/ and therefore never ships with the installed plugin — so the CLAUDE.md marker was always stamped "unknown" and plugin-update could never detect a stale embed. It now reads .claude-plugin/plugin.json, the only version file that installs.',
+      'FIXED version drift: plugin.json and marketplace.json were still on 0.4.0 while version.ts said v0.4.2, because the commit process only ever bumped version.ts. All three now move together, and workflow/commit-to-git.md says so.',
+      'agents/liangzai.md tool table was missing liangzai_get_config entirely; added it plus liangzai_set_schedule and liangzai_send_run_report.',
+      'Requires gateway v0.6.0 for liangzai_set_schedule, liangzai_send_run_report, and schedule in liangzai_get_config.',
+    ],
+  },
   {
     version: 'v0.4.2',
     date: 'Jul 13, 2026',

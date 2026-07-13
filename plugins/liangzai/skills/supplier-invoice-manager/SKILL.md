@@ -155,3 +155,20 @@ the owner can, after paying his bank.
 Counts, not row dumps: how many invoices logged, how many need review and why, how many
 suppliers matched, the net variance, anything still awaiting an SOA. Name the flagged
 supplier and outlet. If nothing needs him, say so plainly.
+
+### When this ran on a schedule, email him — always
+
+If the run was started by a Cowork scheduled task rather than by the owner sitting there:
+
+> **capture** → call **`liangzai_send_run_report`** with `job: "weekly_capture"`, the same
+> counts you'd have said out loud in `summary_lines`, and anything needing a human in
+> `needs_owner` (unreadable attachments, unmatched outlets). Set `status: "attention"` if
+> `needs_owner` is non-empty, `"ok"` if not, `"failed"` if the run broke.
+>
+> **reconcile** → `liangzai_send_summary` already emails him. Do **not** also send a run
+> report; that would be two emails for one job.
+
+**Send it even when there is nothing to report.** A week with no invoices and a week where
+the job never ran look identical to him — the email is the only thing that tells them
+apart, and with Loyverse's 30-day limit a silently-dead capture costs real money. A quiet
+success is a signal, not noise.

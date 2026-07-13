@@ -91,25 +91,80 @@ The OAuth client must be **Internal** to the Google Workspace — `gmail.readonl
 restricted scope, and an External client left in Testing gets refresh tokens that
 **expire after 7 days**, so the weekly job would run once and die silently.
 
-Walk the user through it in the Google Cloud console:
+This is the fiddliest step in the whole setup. **Walk the user through it one click at a
+time and confirm each sub-step before moving on.** Do not paraphrase — the console has
+several near-identical menus and the wrong one is a dead end.
 
-1. Create/pick a project. **APIs & Services → Library**: enable **Gmail API** and
-   **Google Sheets API**.
-2. **OAuth consent screen** → User type **Internal** → save.
-3. **Credentials → Create Credentials → OAuth client ID** → Application type
-   **Web application**.
-4. **Add the redirect URI.** Under **Authorized redirect URIs**, click **+ ADD URI** and
-   enter exactly:
+### 3a. Sign in and create the project
 
-   ```
-   http://localhost:5179
-   ```
+> Go to <https://console.cloud.google.com> and sign in **as the supplier mailbox account**
+> (the same Workspace account the agents will read mail from).
+>
+> Top bar → the project dropdown → **New Project**. Name it `liangzai-agents` → **Create**.
+> When it finishes, make sure that new project is **selected in the top bar** — everything
+> below applies to the selected project.
 
-   **This step is mandatory.** The consent flow below hands the code back to a tiny local
-   server on port 5179. If this URI is not registered, Google rejects the sign-in with
-   `redirect_uri_mismatch` and nothing works. It must match exactly — `http` (not `https`),
-   no trailing slash.
-5. Save, then copy the **Client ID** and **Client secret**.
+### 3b. Turn on the two APIs
+
+Both are required: Gmail (to read invoice attachments and send the summary) and Sheets (to
+write the tracking sheet). If either is off, the token mints fine but every call fails
+later with `API has not been used in project … before or it is disabled`.
+
+> Left menu → **APIs & Services → Library**.
+> 1. Search **Gmail API** → click it → **Enable**.
+> 2. Go back to Library. Search **Google Sheets API** → click it → **Enable**.
+
+Confirm both now show **API Enabled** before continuing.
+
+### 3c. Configure the consent screen (Google Auth Platform)
+
+Google reorganised this: it is no longer one "OAuth consent screen" page but a section
+called **Google Auth Platform** with sub-pages (Branding, Audience, Clients, Data Access).
+
+> Left menu → **APIs & Services → OAuth consent screen** (this opens **Google Auth
+> Platform**). If it shows a **Get started** button, click it.
+>
+> **Branding** — App name `Liang Zai Agents`; User support email = the mailbox account;
+> Developer contact email = the same. **Save**.
+>
+> **Audience** — set **User type: Internal**. **Save**.
+
+**"Internal" must be selectable.** If it is greyed out, the account signed in is not a
+Google Workspace account — stop and fix that first. Do not fall back to **External**: an
+External app in Testing hands out refresh tokens that expire in 7 days, and the weekly job
+would run once and then fail silently forever. This is the single worst outcome available
+and it is the default one.
+
+### 3d. Add the scopes (Data Access)
+
+> **Google Auth Platform → Data Access → Add or remove scopes.** Add these three, then
+> **Update** and **Save**:
+>
+> ```
+> https://www.googleapis.com/auth/gmail.readonly
+> https://www.googleapis.com/auth/gmail.send
+> https://www.googleapis.com/auth/spreadsheets
+> ```
+
+### 3e. Create the OAuth client — and add the redirect URI
+
+> **Google Auth Platform → Clients → Create client.**
+> - **Application type: Web application** (not Desktop — we need to register a redirect URI).
+> - Name: `liangzai-cowork`.
+> - Under **Authorized redirect URIs**, click **+ ADD URI** and enter exactly:
+>
+>   ```
+>   http://localhost:5179
+>   ```
+>
+> - Click **Create**, then copy the **Client ID** and **Client secret**.
+
+**The redirect URI is mandatory and must match exactly** — `http` (not `https`), no
+trailing slash, port `5179`. The consent flow below hands the code back to a tiny local
+server on that port. Without it, Google rejects the sign-in with `redirect_uri_mismatch`
+and nothing works.
+
+### 3f. Save the credentials and run the consent flow
 
 Write `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_ACCOUNT`, `SUPPLIER_MAILBOX` into
 `.claude/settings.local.json` under `env`, then run:
@@ -118,14 +173,24 @@ Write `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_ACCOUNT`, `SUPPLIER_MAI
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/oauth/google_oauth.py
 ```
 
-It prints a link — open it, sign in as the supplier mailbox, and click Allow. (The script
-refuses to save under any other login.) It writes `GMAIL_REFRESH_TOKEN` +
-`SHEETS_REFRESH_TOKEN` locally. Give the same refresh token to Five Bucks for the gateway,
-plus `SUMMARY_RECIPIENTS` — the comma-separated allowlist of who receives the monthly
-summary, a hard guard so no bug can email a supplier.
+It prints a link — open it, sign in **as the supplier mailbox**, and click **Allow**. (The
+script refuses to save under any other login, so a stray personal account can never quietly
+become the inbox the agent reads.) On success it writes `GMAIL_REFRESH_TOKEN` +
+`SHEETS_REFRESH_TOKEN` locally.
 
-**If you see `redirect_uri_mismatch`:** the redirect URI in step 4 is missing or doesn't
-match. Go back to the OAuth client and add `http://localhost:5179` exactly.
+Give the same refresh token to Five Bucks for the gateway, plus `SUMMARY_RECIPIENTS` — the
+comma-separated allowlist of who receives the monthly summary, a hard guard so no bug can
+email a supplier.
+
+### If something fails
+
+| What you see | Fix |
+|---|---|
+| `redirect_uri_mismatch` | The redirect URI is missing or wrong. Go to **Clients → your client → Authorized redirect URIs** and add `http://localhost:5179` exactly (3e). |
+| `Access blocked: … has not completed the Google verification process` | The app is **External**. Switch **Audience** to **Internal** (3c). |
+| `API has not been used in project … or it is disabled` | Gmail API or Sheets API is off. Enable both (3b). |
+| `Internal` is greyed out | Not signed in with a Google Workspace account. Sign in with one. |
+| Token stops working after ~7 days | The app was left **External / Testing**. Recreate it as **Internal** (3c). |
 
 ## Step 4 — Create the Sheet
 
@@ -195,7 +260,7 @@ The skill runs inside the Cowork sandbox (Ubuntu VM), so search `$CLAUDE_CONFIG_
 the host-OS paths are fallbacks for local Claude Code.
 
 ```python
-import glob, os, re, datetime
+import glob, json, os, re, datetime
 
 config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
 patterns = []
@@ -217,13 +282,14 @@ body = re.sub(r'^---\s*\n.*?\n---\s*\n', '', agent_md, count=1, flags=re.DOTALL)
 embed_date = datetime.date.today().isoformat()
 
 # Read the installed plugin version to stamp into the marker (plugin-update compares it).
-vt = [f for p in ([os.path.join(config_dir, "**/versions/version.ts")] if config_dir else [])
-      + [os.path.expanduser("~/.claude/**/liangzai/**/versions/version.ts")]
-      for f in glob.glob(p, recursive=True)]
+# It comes from .claude-plugin/plugin.json — the only version file that SHIPS with the
+# plugin. The repo's versions/version.ts sits outside plugins/liangzai/ and is not
+# installed, so reading it here would always yield "unknown".
 plugin_version = "unknown"
-if vt:
-    m = re.search(r"DEFAULT_VERSION\s*=\s*['\"](v[\S]+)['\"]", open(vt[0], encoding="utf-8").read())
-    plugin_version = m.group(1) if m else "unknown"
+pj = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(found[0]))),
+                  ".claude-plugin", "plugin.json")   # …/liangzai/.claude-plugin/plugin.json
+if os.path.exists(pj):
+    plugin_version = "v" + json.load(open(pj, encoding="utf-8"))["version"]
 ```
 
 ### 9b. Patch CLAUDE.md idempotently
@@ -246,13 +312,81 @@ the block. Surface any write failure now, before Step 10.
 
 ## Step 10 — Schedule & hand over
 
-Create two Cowork Scheduled Tasks:
+Two jobs run on their own from here. **Ask the owner when he wants them** — do not assume
+the defaults. Then record his answer, then walk him through creating the tasks.
 
-| Task | When | Runs |
-|---|---|---|
-| Weekly capture | Sunday, 08:00 SGT | `/supplier-invoice-manager capture` then `/cost-optimizer capture-sales` |
-| Monthly close | 6th, 09:00 SGT | `/supplier-invoice-manager reconcile` then `/cost-optimizer monthly` |
+### 10a. Ask for the two cadences
 
-The monthly job runs on the **6th** because SOAs land by the 4th. Then tell the owner in
-one short message: what runs, when, what lands in the Sheet, and that **nothing is ever
+**Weekly capture** — which weekday, what time? (default **Sunday 08:00**)
+
+**Monthly close** — which day of the month, what time? (default **the 6th, 09:00**)
+
+Explain the monthly one before he picks, in his language:
+
+> Your suppliers send their statements by the 4th. If we reconcile before they arrive,
+> we'd be checking your invoices against statements that aren't there yet and everything
+> would look wrong. So pick the 5th or later.
+
+**Refuse any day below 5, and any day above 28** (the 29th doesn't exist in February).
+
+### 10b. Record it
+
+> Call **`liangzai_set_schedule`** with his weekday, times, day-of-month, and
+> `confirmed_by_owner: true`.
+
+This is saved to the Sheet, not to this laptop — so `/plugin-update` can later tell "he
+never picked a schedule" apart from "he picked one", from any machine.
+
+### 10c. Create the two Cowork tasks
+
+> In Cowork: **Scheduled** (left sidebar) → **New task** → **Set up manually**.
+
+Create these two. Give him the name, the frequency, and the prompt to paste:
+
+**Task 1 — `Liang Zai · Weekly capture`** · frequency **Weekly**, his weekday + time:
+
+```
+Run /supplier-invoice-manager capture, then /cost-optimizer capture-sales.
+Then call liangzai_send_run_report with job: "weekly_capture", a summary of what was
+logged, and anything that needs the owner in needs_owner. Send the report even if
+there was nothing to log — a silent run is indistinguishable from a broken one.
+```
+
+**Task 2 — `Liang Zai · Monthly close`** · frequency **Daily**, his time:
+
+```
+Today is {{today}}. The monthly close runs on day <N> of the month.
+If today is not day <N>, STOP NOW — do nothing, write nothing, send nothing.
+
+Otherwise: run /supplier-invoice-manager reconcile, then /cost-optimizer monthly,
+then send the reconciliation summary with liangzai_send_summary.
+```
+
+**Why Task 2 is Daily and not Monthly:** Cowork's frequency picker only offers hourly,
+daily, weekly, weekdays, or manual — **there is no monthly option**. So the task wakes
+daily and the date check on its first line exits immediately on the other ~29 days. Do
+not remove that guard; without it the close would run every single day.
+
+**Cost-per-bowl is step 2 of the monthly close, never its own task.**
+`liangzai_compute_cost_per_bowl` reads the `reconciliation` tab, so scheduling it
+separately risks it firing before reconciliation and publishing a cost against a stale or
+empty basis. One task, in order, is what makes that impossible.
+
+### 10d. Tell him the thing that will actually bite him
+
+Say this plainly — it is the one failure that cannot be undone:
+
+> These jobs only run while this computer is on. If it's off on the day, the job is
+> missed. Missing one week is survivable — the next run catches up the sales it missed.
+> **But Loyverse only keeps 30 days of sales.** If the computer is off for more than a
+> month, that month's sales are gone for good and we can never work out your cost per
+> bowl for it.
+>
+> So: **you get an email every time a job finishes, even when there's nothing to report.**
+> That's on purpose. If a Sunday goes by and no email arrives, something is wrong — open
+> Cowork and tell Claude.
+
+### 10e. Hand over
+
+One short message: what runs, when, what lands in the Sheet, and that **nothing is ever
 paid automatically** — every flagged item and every payment goes through him.
