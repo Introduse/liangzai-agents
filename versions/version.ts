@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.9.0';
+const DEFAULT_VERSION = 'v0.10.0';
 const DEFAULT_DATE = 'Jul 13, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,19 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.10.0',
+    date: 'Jul 13, 2026',
+    changes: [
+      'Suppliers now register themselves, so the first real invoice run stops flagging EVERY row. The gateway\'s supplier list held three fixture names and none of the owner\'s real ones, with no way to add one short of an engineer editing JSON and redeploying. Gateway v0.11.0 learns a supplier on first sight, keyed on the sender\'s email domain — a supplier can typo their letterhead, not their mail server.',
+      'supplier-invoice-manager: capture now REPORTS newly registered suppliers rather than asking about them ("12 invoices logged. 3 new suppliers registered: … — nothing needed from you"). That is information, not a decision.',
+      'The one case the agent must NOT decide, and the skill says why: a known supplier NAME arriving from an UNKNOWN email address. That is either their outsourced billing agent or a different company with a similar name — identical to a machine, obvious to the owner. Creating a supplier is safe (worst case, a visible duplicate); MERGING two is not (it adds two companies\' money together and the total still looks plausible). Register freely, merge never.',
+      'reconcile: check merge_suggestions BEFORE explaining anything. A company that invoices from one address and sends statements from another becomes two suppliers, and BOTH halves read as unmatched — which looks like a supplier problem and is actually ours. The skill now surfaces it first, because it explains rows that otherwise look inexplicable.',
+      'agents/liangzai.md: added liangzai_list_suppliers and liangzai_merge_suppliers. Amended the "never guess a supplier or outlet" rule, which was no longer true: the gateway now REGISTERS an unknown supplier automatically, and still never MERGES one without the owner saying so.',
+      'docs/suppliers.md (new): why the supplier name is a join key and not a label, why a split silently breaks reconciliation, what registers automatically, and what genuinely needs a human. Generic — no client names or figures; the repo is public.',
+      'Requires gateway v0.11.0, which also fixes the Sheet-corruption bug from the owner\'s first live run (data written above the header, retries behaving differently, rows inheriting the header\'s dark fill — all one bug: Google\'s values.append was guessing where the rows went). The connector must be reconnected: two new tools.',
+    ],
+  },
   {
     version: 'v0.9.0',
     date: 'Jul 13, 2026',

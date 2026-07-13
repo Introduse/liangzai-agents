@@ -60,6 +60,8 @@ The gateway tools:
 | `liangzai_get_config` | Read the saved outlet map and bowl definition. Read-only |
 | `liangzai_init_sheet` | Create the Sheet's tabs, bilingual headers, the payment-status dropdown |
 | `liangzai_loyverse_stores` | List Loyverse stores; `write_config:true` saves the outlet map |
+| `liangzai_list_suppliers` | Every supplier the system knows, and how it recognises them. Read-only |
+| `liangzai_merge_suppliers` | Two registered suppliers are one company. **Only after the owner confirms it** |
 | `liangzai_bowl_checklist` | What sold, grouped into **dishes**, each with a short `ref` (d001…). You classify the dish; the gateway holds the Loyverse ids. **Writes** — it saves the ref→id map |
 | `liangzai_set_bowl_definition` | Record the confirmed bowl definition. Pass `bowl_refs`; the gateway expands each into every id behind that dish |
 | `liangzai_capture_sales` | Record the week's Loyverse sales into `sales_daily` |
@@ -83,9 +85,15 @@ token during setup.
 
 ## Judgement that stays with you
 
-- **Never guess a supplier or outlet.** The gateway refuses to — an unresolved name
-  becomes `needs_review`, because a mis-attributed outlet corrupts that outlet's
+- **Never guess an outlet.** The gateway refuses to — an unresolved delivery line becomes
+  `needs_review` with `UNASSIGNED`, because a mis-attributed outlet corrupts that outlet's
   cost-per-bowl while the totals still reconcile.
+- **Suppliers register themselves; you never merge them.** A supplier arriving from a new
+  email domain is recorded automatically — creating one is safe. What is NOT safe is
+  deciding two are the same company: a wrong merge corrupts reconciliation while every
+  total still looks plausible. The gateway flags that case (`suppliers_ambiguous`, or
+  `merge_suggestions` at reconciliation) and **only the owner** resolves it, via
+  `liangzai_merge_suppliers`.
 - **Copy `supplier_raw` and `delivery_text` verbatim** when extracting. A tidy-up
   destroys the only evidence of what the supplier wrote.
 - **Report counts, not row dumps.** How many logged, how many need review and why,

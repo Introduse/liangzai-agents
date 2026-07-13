@@ -78,10 +78,26 @@ Rules that matter more than speed:
 > true` first to preview).
 
 The gateway checks each invoice's line sum against its stated total; a mismatch writes
-the lines anyway with `needs_review` and the arithmetic in the reason. Supplier and
-outlet are canonicalised — anything unresolved becomes `needs_review` with
-`UNASSIGNED`, **never a guess**. Re-running the same week is safe: `source_ref` makes
-it idempotent.
+the lines anyway with `needs_review` and the arithmetic in the reason. Outlets are
+canonicalised — an unresolved one becomes `needs_review` with `UNASSIGNED`, **never a
+guess**. Re-running the same week is safe: `source_ref` makes it idempotent.
+
+**Suppliers register themselves.** A supplier you have never seen is recorded automatically,
+keyed on the sender's email domain — no list to maintain, nothing to ask him. The response
+carries two fields:
+
+- **`suppliers_registered`** — new suppliers, now known. **Tell him, don't ask him:**
+  *"12 invoices logged. 3 new suppliers registered: EcoGreen Packaging, … — nothing needed
+  from you."* This is information, not a decision.
+- **`suppliers_ambiguous`** — the one case the gateway refuses to decide. A name it already
+  knows has arrived from an address it doesn't. That is either the supplier's billing agent
+  or a *different company with a similar name*, and guessing wrong corrupts reconciliation
+  while every total still looks reasonable. Put the question to him plainly — *"is this the
+  same company?"* — and if he says yes, call **`liangzai_merge_suppliers`**.
+
+Why the machine registers but never merges: **creating** a supplier is safe (the worst case
+is a duplicate you merge later), while **merging** two is not. That asymmetry is the whole
+design.
 
 ### 4. Capture sales too
 
@@ -122,6 +138,19 @@ What the arithmetic guarantees:
   the row upserts.
 - **Equal totals are not enough.** Differing invoice numbers on the two sides flag the
   row even when the money agrees.
+
+**Check `merge_suggestions` before you explain anything.** If it is non-empty, one company
+is billing from two addresses — it invoices as one supplier and sends statements as another
+— so it registered as two, and **both halves read as unmatched**. That looks like a supplier
+problem and is actually ours. Say so first, because it explains rows that otherwise look
+inexplicable:
+
+> *EcoGreen Packaging* has invoices but no statement, and *Ecogreen Pkg Services* has a
+> statement but no invoices. Are these the same company?
+
+If he says yes → **`liangzai_merge_suppliers`** → re-run reconciliation. The rows upsert, so
+they correct in place; nothing is re-entered. If he says no, leave them apart — they really
+are two suppliers, and the `SOA_MISSING` is real.
 
 Month one will be noisy — rounding, GST inclusivity, partial deliveries. That is the
 system working. The owner is the filter.
