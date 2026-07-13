@@ -89,19 +89,43 @@ gateway.
 
 The OAuth client must be **Internal** to the Google Workspace — `gmail.readonly` is a
 restricted scope, and an External client left in Testing gets refresh tokens that
-**expire after 7 days**, so the weekly job would run once and die silently. Walk the user
-through creating a Desktop OAuth client under a Workspace account (Gmail API + Sheets API
-enabled, consent screen **Internal**), write `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-`OAUTH_ACCOUNT`, `SUPPLIER_MAILBOX` into `.claude/settings.local.json` under `env`, then:
+**expire after 7 days**, so the weekly job would run once and die silently.
+
+Walk the user through it in the Google Cloud console:
+
+1. Create/pick a project. **APIs & Services → Library**: enable **Gmail API** and
+   **Google Sheets API**.
+2. **OAuth consent screen** → User type **Internal** → save.
+3. **Credentials → Create Credentials → OAuth client ID** → Application type
+   **Web application**.
+4. **Add the redirect URI.** Under **Authorized redirect URIs**, click **+ ADD URI** and
+   enter exactly:
+
+   ```
+   http://localhost:5179
+   ```
+
+   **This step is mandatory.** The consent flow below hands the code back to a tiny local
+   server on port 5179. If this URI is not registered, Google rejects the sign-in with
+   `redirect_uri_mismatch` and nothing works. It must match exactly — `http` (not `https`),
+   no trailing slash.
+5. Save, then copy the **Client ID** and **Client secret**.
+
+Write `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_ACCOUNT`, `SUPPLIER_MAILBOX` into
+`.claude/settings.local.json` under `env`, then run:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/oauth/google_oauth.py
 ```
 
-Sign in as the supplier mailbox and click Allow — the script refuses any other login. It
-writes `GMAIL_REFRESH_TOKEN` + `SHEETS_REFRESH_TOKEN` locally. Give the same refresh token
-to Five Bucks for the gateway (plus `SUMMARY_RECIPIENTS`, the comma-separated allowlist of
-who receives the monthly summary — a hard guard so no bug can email a supplier).
+It prints a link — open it, sign in as the supplier mailbox, and click Allow. (The script
+refuses to save under any other login.) It writes `GMAIL_REFRESH_TOKEN` +
+`SHEETS_REFRESH_TOKEN` locally. Give the same refresh token to Five Bucks for the gateway,
+plus `SUMMARY_RECIPIENTS` — the comma-separated allowlist of who receives the monthly
+summary, a hard guard so no bug can email a supplier.
+
+**If you see `redirect_uri_mismatch`:** the redirect URI in step 4 is missing or doesn't
+match. Go back to the OAuth client and add `http://localhost:5179` exactly.
 
 ## Step 4 — Create the Sheet
 

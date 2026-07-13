@@ -88,7 +88,14 @@ def main():
         "login_hint": expected,
     })
 
-    print(f"Sign in as {expected} and grant access:\n\n{auth_url}\n", flush=True)
+    print(
+        f"Sign in as {expected} and grant access:\n\n{auth_url}\n\n"
+        f"NOTE: your Google OAuth client must list this exact Authorized redirect URI:\n"
+        f"  {REDIRECT_URI}\n"
+        f"(Google Cloud console -> Credentials -> your OAuth client -> Authorized redirect URIs)\n"
+        f"Without it Google rejects the sign-in with 'redirect_uri_mismatch'.\n",
+        flush=True,
+    )
     try:
         webbrowser.open(auth_url)
     except Exception:
