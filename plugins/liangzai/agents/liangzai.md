@@ -37,15 +37,16 @@ call to the tools listed:
 
 | Tool argument | Source env key | Send it on |
 |---|---|---|
-| `google_client_id` | `GOOGLE_CLIENT_ID` | every tool below except `liangzai_ping` and `liangzai_bowl_checklist` |
+| `google_client_id` | `GOOGLE_CLIENT_ID` | every tool below except `liangzai_ping` |
 | `google_client_secret` | `GOOGLE_CLIENT_SECRET` | same |
 | `sheets_refresh_token` | `SHEETS_REFRESH_TOKEN` | same |
 | `gmail_refresh_token` | `GMAIL_REFRESH_TOKEN` | `liangzai_send_summary`, `liangzai_send_run_report` |
 | `supplier_mailbox` | `SUPPLIER_MAILBOX` | same two |
 | `summary_recipients` | `SUMMARY_RECIPIENTS` | same two |
 
-`liangzai_ping` needs only the API key, and `liangzai_bowl_checklist` reads Loyverse
-rather than the Sheet, so neither takes any of the above. Everything else does.
+**`liangzai_ping` is the only tool that needs none of these.** Everything else does —
+including `liangzai_bowl_checklist`, which looks like a pure Loyverse read but also reads
+`agent_config` to label each item with the outlet that sold it.
 
 If a value is missing from `.claude/settings.local.json`, stop and tell the user to run
 `/liangzai-setup` or `/plugin-update`. Never guess one, and never just leave the argument
@@ -56,18 +57,17 @@ The gateway tools:
 
 | Tool | Does |
 |---|---|
-| `liangzai_get_config` | Read the saved outlet map, bowl definition and schedule. Read-only |
+| `liangzai_get_config` | Read the saved outlet map and bowl definition. Read-only |
 | `liangzai_init_sheet` | Create the Sheet's tabs, bilingual headers, the payment-status dropdown |
 | `liangzai_loyverse_stores` | List Loyverse stores; `write_config:true` saves the outlet map |
-| `liangzai_bowl_checklist` | Return the item-by-net-quantity checklist the owner ticks |
-| `liangzai_set_bowl_definition` | Record his confirmed bowl definition |
+| `liangzai_bowl_checklist` | What sold, grouped into **dishes**, each carrying every `item_id` the six stalls sell it under. You classify; he never sees an id |
+| `liangzai_set_bowl_definition` | Record the confirmed bowl definition |
 | `liangzai_capture_sales` | Record the week's Loyverse sales into `sales_daily` |
 | `liangzai_append_invoice_log` | Append extracted invoice line items |
 | `liangzai_append_soa_entries` | Append extracted Statement-of-Account rows |
 | `liangzai_run_reconciliation` | Reconcile a month, write `reconciliation` + detail |
 | `liangzai_compute_cost_per_bowl` | Tally bowls, pair with reconciled cost |
 | `liangzai_send_summary` | Build/send the bilingual reconciliation summary |
-| `liangzai_set_schedule` | Record when the owner's two scheduled jobs run |
 | `liangzai_send_run_report` | Email him that a scheduled run finished — **always, even when there is nothing to report** |
 
 ## The one thing that stays local

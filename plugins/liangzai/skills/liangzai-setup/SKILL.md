@@ -17,10 +17,11 @@ The owner is a hawker-chain operator, not an engineer. **Explain what each step 
 before asking, do one step at a time, and confirm before moving on. Never show a stack
 trace** — say plainly what broke and what you need.
 
-Almost everything runs through the **gateway** (a remote MCP server Five Bucks deploys,
-holding the Google and Loyverse credentials). The owner's setup connects to it, mints
-the one local token invoice downloads need, and embeds the agent so every future session
-loads it. Setup is safe to re-run — every step checks whether it is already done.
+Almost everything runs through the **gateway** (a remote MCP server Five Bucks deploys).
+It holds only the **Loyverse** token and the spreadsheet id; the **Google credentials are
+this machine's**, kept in `.claude/settings.local.json` and sent with every call. Setup
+connects the gateway, mints those Google credentials, and embeds the agent so every future
+session loads it. It is safe to re-run — every step checks whether it is already done.
 
 ## Arguments
 
@@ -149,9 +150,12 @@ and it is the default one.
 > - Click **Create**, then copy the **Client ID** and **Client secret**.
 
 **The redirect URI is mandatory and must match exactly** — `http` (not `https`), no
-trailing slash, port `5179`. The consent flow below hands the code back to a tiny local
-server on that port. Without it, Google rejects the sign-in with `redirect_uri_mismatch`
-and nothing works.
+trailing slash, port `5179`. Without it Google rejects the sign-in with
+`redirect_uri_mismatch` before he ever reaches the Allow button.
+
+**Nothing is listening on that port**, and nothing needs to be. Google puts the code in
+the browser's address bar when it redirects there; the page fails to load, and he pastes
+that URL back (3g–3h). The failed page *is* the handoff.
 
 ### 3f. Save the credentials
 
@@ -374,7 +378,7 @@ the block. Surface any write failure now, before Step 10.
 ## Step 10 — Schedule & hand over
 
 Two jobs run on their own from here. **Ask the owner when he wants them** — do not assume
-the defaults. Then record his answer, then walk him through creating the tasks.
+the defaults — then create the tasks with Cowork's own scheduler.
 
 ### 10a. Ask for the two cadences
 
@@ -390,19 +394,18 @@ Explain the monthly one before he picks, in his language:
 
 **Refuse any day below 5, and any day above 28** (the 29th doesn't exist in February).
 
-### 10b. Record it
+### 10b. Create the two tasks with Cowork's `/schedule`
 
-> Call **`liangzai_set_schedule`** with his weekday, times, day-of-month, and
-> `confirmed_by_owner: true`.
+**Use Cowork's own scheduling — do not read UI instructions aloud and do not ask him to
+click through Settings.** Invoke **`/schedule`** and give it the task name, frequency and
+prompt. Cowork asks him to confirm, and the task appears on its **Scheduled** page.
 
-This is saved to the Sheet, not to this laptop — so `/plugin-update` can later tell "he
-never picked a schedule" apart from "he picked one", from any machine.
+**The schedule is Cowork's, and only Cowork's.** There is no gateway tool that records it,
+and there must not be: Cowork owns the cadence, fires the jobs, and lists them. A second
+copy in the Sheet would go stale the first time he edits a task, and a stale copy that is
+written down looks authoritative. To see or change when the jobs run, look in Cowork.
 
-### 10c. Create the two Cowork tasks
-
-> In Cowork: **Scheduled** (left sidebar) → **New task** → **Set up manually**.
-
-Create these two. Give him the name, the frequency, and the prompt to paste:
+Create these two:
 
 **Task 1 — `Liang Zai · Weekly capture`** · frequency **Weekly**, his weekday + time:
 
@@ -433,7 +436,7 @@ not remove that guard; without it the close would run every single day.
 separately risks it firing before reconciliation and publishing a cost against a stale or
 empty basis. One task, in order, is what makes that impossible.
 
-### 10d. Tell him the thing that will actually bite him
+### 10c. Tell him the thing that will actually bite him
 
 Say this plainly — it is the one failure that cannot be undone:
 
@@ -447,7 +450,7 @@ Say this plainly — it is the one failure that cannot be undone:
 > That's on purpose. If a Sunday goes by and no email arrives, something is wrong — open
 > Cowork and tell Claude.
 
-### 10e. Hand over
+### 10d. Hand over
 
 One short message: what runs, when, what lands in the Sheet, and that **nothing is ever
 paid automatically** — every flagged item and every payment goes through him.

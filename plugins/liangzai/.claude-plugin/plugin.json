@@ -1,6 +1,6 @@
 {
   "name": "liangzai",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Liang Zai agents — supplier invoice reconciliation and cost-per-bowl tracking. Skills call the liangzai gateway MCP for all Sheet, Loyverse, and Gmail-send work; only the invoice download runs locally (the Gmail connector cannot fetch attachment bytes).",
   "author": {
     "name": "Five Bucks Ventures",

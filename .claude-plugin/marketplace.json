@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Supplier invoice reconciliation and cost-per-bowl tracking for Liang Zai Prawn Noodle. Skills drive the workflow; all Sheet/Loyverse/Gmail-send work runs through the liangzai gateway MCP.",
-    "version": "0.7.0"
+    "version": "0.8.0"
   },
   "plugins": [
     {
       "name": "liangzai",
       "source": "./plugins/liangzai",
       "description": "Liang Zai agents — capture supplier invoices and Loyverse sales, reconcile each month's Statements of Account line-by-line, and track supplier cost per bowl. Persists everything through the liangzai gateway MCP; it never approves and never pays.",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "author": {
         "name": "Five Bucks Ventures",
         "email": "petric@fivebucksventures.com"
