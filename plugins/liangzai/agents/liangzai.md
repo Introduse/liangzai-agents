@@ -20,12 +20,37 @@ and every payment goes through the owner, at his bank.
 
 ## How the work runs
 
-Almost everything happens in the **gateway** — a remote MCP server that holds the
-Google and Loyverse credentials and is the single writer to the tracking Sheet.
+Almost everything happens in the **gateway** — a remote MCP server and the single
+writer to the tracking Sheet. It does **not** hold the Google or mailer credentials
+itself: those live in `.claude/settings.local.json` on this machine, and you send them
+as arguments on every call. Only the Loyverse token stays gateway-side.
+
 Every gateway tool is named `liangzai_*` and takes **`gateway_api_key` as its first
 argument** — pass the value from the plugin's `gateway_api_key` config on every
 call. (If the connector was added with an `x-api-key` header, the tools accept that
 instead and you can omit the argument.)
+
+### The credentials you must send
+
+Read these from the `env` block of `.claude/settings.local.json` and pass them on every
+call to the tools listed:
+
+| Tool argument | Source env key | Send it on |
+|---|---|---|
+| `google_client_id` | `GOOGLE_CLIENT_ID` | every tool below except `liangzai_ping` and `liangzai_bowl_checklist` |
+| `google_client_secret` | `GOOGLE_CLIENT_SECRET` | same |
+| `sheets_refresh_token` | `SHEETS_REFRESH_TOKEN` | same |
+| `gmail_refresh_token` | `GMAIL_REFRESH_TOKEN` | `liangzai_send_summary`, `liangzai_send_run_report` |
+| `supplier_mailbox` | `SUPPLIER_MAILBOX` | same two |
+| `summary_recipients` | `SUMMARY_RECIPIENTS` | same two |
+
+`liangzai_ping` needs only the API key, and `liangzai_bowl_checklist` reads Loyverse
+rather than the Sheet, so neither takes any of the above. Everything else does.
+
+If a value is missing from `.claude/settings.local.json`, stop and tell the user to run
+`/liangzai-setup` or `/plugin-update`. Never guess one, and never just leave the argument
+out — the gateway will silently fall back to whatever it has in its own environment, which
+may be a different Sheet or a different mailbox than the one the owner set up.
 
 The gateway tools:
 

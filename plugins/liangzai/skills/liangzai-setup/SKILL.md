@@ -26,7 +26,7 @@ loads it. Setup is safe to re-run — every step checks whether it is already do
 
 | Argument | Meaning |
 |---|---|
-| `-- project created` | The user is already inside the project session. **Skip Step 1a** and begin at Step 1b. |
+| `-- project created` | The user is already inside the project session. **Skip Step 1** and begin at Step 2. |
 
 ## Flow
 
@@ -35,9 +35,7 @@ so they can pause and resume anytime. The only exception is an explicit "skip".
 
 ---
 
-## Step 1 — Cowork setup
-
-### 1a. Work in a Project
+## Step 1 — Work in a Project
 
 All local files (the invoice cache, `.claude/settings.local.json`) live inside a Cowork
 project. Setup cannot run without one.
@@ -55,16 +53,6 @@ Then have the user **open the project session** and re-run:
 
 **Do not continue in this session** — resume inside the project.
 
-### 1b. Configure settings
-
-> Go to **Settings** and enable:
-> 1. **Claude Code → Allow bypass permissions mode** — ON (so scheduled jobs run
->    without interruption).
-> 2. **Capabilities → Domain Allowlist → All Domains** — ON (so the local download
->    script can reach Gmail and the gateway connector works).
-
-Do not proceed until both 1a and 1b are confirmed.
-
 ## Step 2 — Connect the gateway
 
 The gateway is where the Sheet writes, reconciliation, and the summary email happen. It
@@ -80,12 +68,13 @@ dialog — paste it when the plugin prompts for **`gateway_api_key`** (stored in
 keychain). Confirm by asking the model to call **`liangzai_ping`** — it returns `pong`
 when the key is valid. If not, the key or URL is wrong; stop and fix.
 
-## Step 3 — Google access for downloads
+## Step 3 — Google access
 
-The gateway holds the Google credentials, but **downloading invoice attachments runs
-locally** (the Gmail connector can't fetch attachment bytes), so this machine needs a
-`gmail.readonly` refresh token. Minting it also produces the token Five Bucks sets on the
-gateway.
+This machine is where the Google credentials live. They do two jobs. Locally, they let
+`download_invoices.py` fetch invoice attachments — the Gmail connector can't fetch
+attachment bytes, so that part has to run here. Remotely, they are what every `liangzai_*`
+call sends to the gateway, which holds no Google credentials of its own (see
+`agents/liangzai.md`). One consent, minted here, covers both.
 
 The OAuth client must be **Internal** to the Google Workspace — `gmail.readonly` is a
 restricted scope, and an External client left in Testing gets refresh tokens that
@@ -164,23 +153,66 @@ trailing slash, port `5179`. The consent flow below hands the code back to a tin
 server on that port. Without it, Google rejects the sign-in with `redirect_uri_mismatch`
 and nothing works.
 
-### 3f. Save the credentials and run the consent flow
+### 3f. Save the credentials
 
 Write `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_ACCOUNT`, `SUPPLIER_MAILBOX` into
-`.claude/settings.local.json` under `env`, then run:
+`.claude/settings.local.json` under `env`. `OAUTH_ACCOUNT` is the supplier mailbox address —
+the consent below is refused under any other login, so a stray personal account can never
+quietly become the inbox the agent reads.
+
+This file is the only copy of these values anywhere. The agent reads them straight out of
+it and passes them to the gateway on every `liangzai_*` call, so if they are wrong or
+missing here, nothing works — not the local download, not the Sheet.
+
+### 3g. Get the sign-in link and give it to him
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/oauth/google_oauth.py
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/oauth/google_oauth.py --auth-url
 ```
 
-It prints a link — open it, sign in **as the supplier mailbox**, and click **Allow**. (The
-script refuses to save under any other login, so a stray personal account can never quietly
-become the inbox the agent reads.) On success it writes `GMAIL_REFRESH_TOKEN` +
-`SHEETS_REFRESH_TOKEN` locally.
+Show him the link it prints and tell him exactly this:
 
-Give the same refresh token to Five Bucks for the gateway, plus `SUMMARY_RECIPIENTS` — the
-comma-separated allowlist of who receives the monthly summary, a hard guard so no bug can
-email a supplier.
+> 1. Open this link.
+> 2. Sign in **as the supplier mailbox** (not your personal Gmail).
+> 3. Click **Allow**.
+> 4. Your browser will then land on a page saying **"This site can't be reached"**.
+>    **That is what success looks like — nothing has gone wrong.**
+> 5. Copy the **whole address** out of the address bar (it starts with
+>    `http://localhost:5179/?code=`) and paste it back to me.
+
+**Do not skip step 4's warning.** The page genuinely fails to load, and an owner who
+isn't expecting that will assume he broke something and stop. Google hands the code back
+only in that address bar — there is nowhere else for it to go, and nothing is listening
+on that port to catch it. The failed page *is* the handoff.
+
+### 3h. Exchange it
+
+When he pastes the URL back:
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/oauth/google_oauth.py --exchange "<the URL he pasted>"
+```
+
+Quote the URL — it contains `&` and an unquoted shell will cut it in half. The script
+pulls the code out, swaps it for a refresh token, checks the account he actually signed in
+as matches `OAUTH_ACCOUNT`, and only then writes `GMAIL_REFRESH_TOKEN` +
+`SHEETS_REFRESH_TOKEN`. If the account doesn't match, it saves nothing and says so.
+
+**The code is single-use and expires in minutes.** If he took a coffee break, or you run
+the exchange twice, Google answers `invalid_grant` — that isn't a misconfiguration, just
+redo 3g.
+
+### 3i. Save the recipient allowlist
+
+Ask the owner who should receive the summary and run-report emails — almost always just
+himself. Write the answer as a comma-separated list under `SUMMARY_RECIPIENTS` in
+`.claude/settings.local.json`, next to the values from 3f and the refresh tokens 3h just
+wrote.
+
+This is a hard guard, not a formality. Every send is checked against this list and refuses
+any address off it, and the mailbox it sends *from* is the one suppliers write *to* — so
+the list is what stands between a bug and an email landing at a supplier. Keep it to the
+owner.
 
 ### If something fails
 

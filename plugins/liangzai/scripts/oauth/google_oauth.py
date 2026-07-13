@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time OAuth loopback consent for the supplier mailbox + tracker Sheet.
+"""One-time OAuth consent for the supplier mailbox + tracker Sheet.
 
 Mints refresh tokens for three scopes:
 
@@ -15,18 +15,25 @@ Scope classification, since it decides everything below: gmail.readonly is
 RESTRICTED (external apps need an annual third-party security assessment);
 gmail.send is merely SENSITIVE. An Internal client is exempt from both.
 
-Two accounts, two phases:
+TWO COMMANDS, NO LOCAL SERVER.
 
-  DEV       We do not have access to ai@example.com. Consent as our own
-            Google account, which receives mocked-up supplier invoices and has
-            edit access to the owner's tracker Sheet. Set OAUTH_ACCOUNT to it.
+    python3 scripts/oauth/google_oauth.py --auth-url
+        Prints the Google sign-in link. The owner opens it, signs in, approves.
 
-  PRODUCTION the owner consents as ai@example.com inside his own Cowork
-            project, and OAUTH_ACCOUNT is set to that address. The guard below
-            then refuses any other account, so a stray personal login can never
-            silently become the mailbox the agent reads.
+    python3 scripts/oauth/google_oauth.py --exchange "<the URL he lands on>"
+        Takes the redirect URL out of his address bar, pulls the ?code= out of
+        it, swaps it for a refresh token, and saves.
 
-    python3 scripts/oauth/google_oauth.py
+The redirect still points at http://localhost:5179 — the URI registered on the
+OAuth client — but nothing is listening there, so the browser will show
+"This site can't be reached". THAT IS THE SUCCESS CASE. The code we need is
+sitting in the address bar of that error page. Google never sends the code
+anywhere except that address bar, so pasting the URL back is not a workaround;
+it is the whole handoff.
+
+Why no loopback server any more: it needed a free port, a browser that could
+reach it, and a terminal held open for five minutes. Copying one URL is
+something the owner can do without any of that.
 
 THE OAUTH CLIENT MUST BE "INTERNAL". This is not a preference.
 
@@ -36,21 +43,16 @@ security assessment. Leaving the app in "Testing" to avoid that caps refresh-tok
 lifetime at 7 DAYS — so the weekly job would run once and then die silently,
 forever, while appearing to be configured correctly.
 
-your-workspace.example is a Google Workspace domain (MX -> aspmx.l.google.com). An
-OAuth client created inside that Workspace org with user type **Internal** is
-exempt from verification, from the test-user cap, and from the 7-day expiry.
-
-So: create the client in a Google Cloud project owned by the your-workspace.example
-Workspace, set the consent screen's user type to Internal, and consent as
-ai@example.com. `/liangzai-setup` walks through this step by step.
+An OAuth client created inside a Google Workspace org with user type **Internal**
+is exempt from verification, from the test-user cap, and from the 7-day expiry.
+`/liangzai-setup` Step 3 walks through this one click at a time.
 """
-import http.server
+import argparse
 import json
 import os
 import sys
 import urllib.parse
 import urllib.request
-import webbrowser
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
@@ -73,58 +75,50 @@ def save(**kv):
     SETTINGS.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
-def main():
-    cid = read_env("GOOGLE_CLIENT_ID", required=True)
-    csecret = read_env("GOOGLE_CLIENT_SECRET", required=True)
-    expected = (read_env("OAUTH_ACCOUNT", required=True) or "").strip().lower()
-
-    auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
+def build_auth_url(cid, expected):
+    return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
         "client_id": cid,
         "redirect_uri": REDIRECT_URI,
         "response_type": "code",
         "scope": " ".join(SCOPES),
-        "access_type": "offline",
-        "prompt": "consent",
+        "access_type": "offline",   # without this there is no refresh_token at all
+        "prompt": "consent",        # force a fresh one even if he consented before
         "login_hint": expected,
     })
 
-    print(
-        f"Sign in as {expected} and grant access:\n\n{auth_url}\n\n"
-        f"NOTE: your Google OAuth client must list this exact Authorized redirect URI:\n"
-        f"  {REDIRECT_URI}\n"
-        f"(Google Cloud console -> Credentials -> your OAuth client -> Authorized redirect URIs)\n"
-        f"Without it Google rejects the sign-in with 'redirect_uri_mismatch'.\n",
-        flush=True,
+
+def extract_code(pasted):
+    """Accept the whole redirect URL, or a bare code if that is all he sent."""
+    pasted = pasted.strip().strip('"').strip("'")
+    if pasted.startswith("http://") or pasted.startswith("https://"):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(pasted).query)
+        if "error" in q:
+            raise SystemExit(
+                f"Google returned an error instead of a code: {q['error'][0]}.\n"
+                "If it says 'access_denied' he clicked Cancel — re-run --auth-url.\n"
+                "If it says 'redirect_uri_mismatch', add http://localhost:5179 to the "
+                "OAuth client's Authorized redirect URIs (setup Step 3e)."
+            )
+        if "code" not in q:
+            raise SystemExit(
+                "That URL has no ?code= in it. Copy the FULL address from the browser's "
+                "address bar on the page that failed to load — the code is in the URL, "
+                "not on the page."
+            )
+        return q["code"][0]
+    if pasted.startswith("4/"):   # Google auth codes look like 4/0A...
+        return pasted
+    raise SystemExit(
+        "That does not look like the redirect URL. Paste the whole thing from the "
+        "address bar, starting with http://localhost:5179/?code="
     )
-    try:
-        webbrowser.open(auth_url)
-    except Exception:
-        pass
 
-    holder = {}
 
-    class Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
-            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
-            if "code" in q:
-                holder["code"] = q["code"][0]
-                self.wfile.write(b"<h2>Done. Close this tab and return to the terminal.</h2>")
-            else:
-                self.wfile.write(b"<h2>No code returned. Check the terminal.</h2>")
-
-        def log_message(self, *a):
-            pass
-
-    httpd = http.server.HTTPServer(("localhost", PORT), Handler)
-    httpd.timeout = 300
-    httpd.handle_request()
-
-    code = holder.get("code")
-    if not code:
-        raise SystemExit("No auth code received (timed out after 5 minutes).")
+def exchange(pasted):
+    cid = read_env("GOOGLE_CLIENT_ID", required=True)
+    csecret = read_env("GOOGLE_CLIENT_SECRET", required=True)
+    expected = (read_env("OAUTH_ACCOUNT", required=True) or "").strip().lower()
+    code = extract_code(pasted)
 
     req = urllib.request.Request(
         "https://oauth2.googleapis.com/token",
@@ -132,8 +126,18 @@ def main():
             "code": code, "client_id": cid, "client_secret": csecret,
             "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code",
         }).encode(), method="POST")
-    with urllib.request.urlopen(req) as r:
-        tok = json.load(r)
+    try:
+        with urllib.request.urlopen(req) as r:
+            tok = json.load(r)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")
+        if "invalid_grant" in body:
+            raise SystemExit(
+                "Google rejected the code (invalid_grant). These codes are single-use "
+                "and expire within minutes — most likely it was already exchanged, or "
+                "it sat too long. Just run --auth-url again and redo the sign-in."
+            )
+        raise SystemExit(f"Token exchange failed ({e.code}): {body}")
 
     refresh = tok.get("refresh_token")
     if not refresh:
@@ -152,9 +156,34 @@ def main():
                          "Nothing saved — re-run and pick the right account, or fix "
                          "OAUTH_ACCOUNT in .claude/settings.local.json.")
 
-    # One consent covers both scopes, so both tokens are the same value.
+    # One consent covers all three scopes, so both tokens are the same value.
     save(GMAIL_REFRESH_TOKEN=refresh, SHEETS_REFRESH_TOKEN=refresh)
     print(f"OK — consented as {email}. Refresh tokens saved to .claude/settings.local.json")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--auth-url", action="store_true", help="Print the Google sign-in link")
+    g.add_argument("--exchange", metavar="URL", help="The redirect URL he landed on")
+    args = ap.parse_args()
+
+    if args.auth_url:
+        cid = read_env("GOOGLE_CLIENT_ID", required=True)
+        expected = (read_env("OAUTH_ACCOUNT", required=True) or "").strip().lower()
+        print(
+            f"Sign in as {expected} and click Allow:\n\n{build_auth_url(cid, expected)}\n\n"
+            f"You will land on a page that says the site can't be reached. THAT IS CORRECT.\n"
+            f"Copy the whole address from the address bar (it starts with {REDIRECT_URI}/?code=)\n"
+            f"and give it back to Claude.\n\n"
+            f"NOTE: the OAuth client must list this exact Authorized redirect URI:\n"
+            f"  {REDIRECT_URI}\n"
+            f"Without it Google rejects the sign-in with 'redirect_uri_mismatch'.\n",
+            flush=True,
+        )
+        return
+
+    exchange(args.exchange)
 
 
 if __name__ == "__main__":

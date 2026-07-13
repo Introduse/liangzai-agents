@@ -40,17 +40,18 @@ stop and tell the user to run **`/liangzai-setup`** first.
 
 ## Step 1 — Detect current state (read-only, no prompts)
 
-All six checks are read-only. Run them, then tag each item **present / missing / stale**.
+All eight checks are read-only. Run them, then tag each item **present / missing / stale**.
 
 | # | Item | How to check | Reads as missing when |
 |---|---|---|---|
 | 1 | Gateway connector + key | **`liangzai_ping`** | Anything other than `pong` — the connector isn't installed, or the key is wrong |
-| 2 | Local Google token | Look for `GMAIL_REFRESH_TOKEN` in the workspace `.claude/settings.local.json` (the local invoice download needs it; the gateway has its own copy) | Key absent or empty |
+| 2 | Google credentials | Look for `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` and `SHEETS_REFRESH_TOKEN` in the workspace `.claude/settings.local.json`. The local invoice download needs them, and every `liangzai_*` call sends them to the gateway — see `agents/liangzai.md` | Any of the four is absent or empty |
 | 3 | Sheet tabs | **`liangzai_init_sheet`** with `dry_run: true` — it inspects the live Sheet and returns `present` and `missing` | `missing` is non-empty. `agent_config` in `missing` means this setup predates the gateway |
 | 4 | Outlet map | **`liangzai_get_config`** — `outlets_configured` / `outlets_count` | `outlets_configured: false`, or `outlets_count` is not 6 |
 | 5 | Bowl definition | **`liangzai_get_config`** — same call as #4 — `bowl_confirmed` | `bowl_confirmed: false` (unset, or set but never confirmed by the owner) |
 | 6 | Schedule | **`liangzai_get_config`** — same call again — `schedule_confirmed` | `schedule_confirmed: false`. Any setup done before plugin v0.5.0 has no schedule recorded, so this will fire on every older install — that is correct, not a false alarm |
 | 7 | CLAUDE.md embed | Does the workspace `CLAUDE.md` contain the `BEGIN/END agents/liangzai.md` block, and is its stamped version the one from Step 0? | Block absent, or stamped version is older |
+| 8 | Recipient allowlist | Look for `SUMMARY_RECIPIENTS` in `.claude/settings.local.json` (sent on every `liangzai_send_summary` / `liangzai_send_run_report` call) | Key absent or empty |
 
 Notes:
 - **#4, #5 and #6 are one `liangzai_get_config` call**, not three. It writes nothing.
@@ -73,11 +74,12 @@ complete:
 | Gap | Fill with |
 |---|---|
 | Gateway connector / key | **liangzai-setup Step 2** |
-| Local Google token | **liangzai-setup Step 3** (`google_oauth.py`) |
+| Google credentials | **liangzai-setup Steps 3g–3h** — `google_oauth.py --auth-url`, he signs in and pastes back the URL he lands on, then `google_oauth.py --exchange "<url>"`. There is no bare invocation any more; running the script with no flag just errors. The whole Google Cloud console walk (3a–3f) is only needed if the OAuth **client** is gone too — if `GOOGLE_CLIENT_ID` is already in `settings.local.json`, the client exists and you only need to re-mint the token |
 | Sheet tabs | **`liangzai_init_sheet`** (no `dry_run`) — creates only the missing tabs and styles only those; it never restyles a tab the user has already edited |
 | Outlet map | **`liangzai_loyverse_stores`** with `write_config: true` |
 | Bowl definition | **liangzai-setup Step 6** — `liangzai_bowl_checklist`, review the item list **with the owner**, then `liangzai_set_bowl_definition` with `confirmed_by_owner: true`. Never confirm it on the owner's behalf |
 | Schedule | **liangzai-setup Step 10** — ask him for the weekday/time and day-of-month/time, `liangzai_set_schedule`, then walk him through creating the two Cowork tasks. Recording the schedule is not the same as creating the tasks; do both, and don't pick the cadence for him |
+| Recipient allowlist | **liangzai-setup Step 3i** — ask who should receive the emails and write `SUMMARY_RECIPIENTS` into `.claude/settings.local.json` |
 
 ## Step 4 — Refresh the CLAUDE.md embed (if stale or missing)
 

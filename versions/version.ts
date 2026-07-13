@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.5.1';
+const DEFAULT_VERSION = 'v0.6.0';
 const DEFAULT_DATE = 'Jul 13, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,18 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.6.0',
+    date: 'Jul 13, 2026',
+    changes: [
+      'The plugin now OWNS the Google and mailer credentials rather than borrowing the gateway\'s. Gateway v0.7.0 accepts them as per-call arguments, so agents/liangzai.md now tells the agent to read GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and SHEETS_REFRESH_TOKEN out of .claude/settings.local.json and send them on every Sheet-touching call — plus GMAIL_REFRESH_TOKEN, SUPPLIER_MAILBOX and SUMMARY_RECIPIENTS on liangzai_send_summary and liangzai_send_run_report. liangzai_ping needs none; liangzai_bowl_checklist reads Loyverse rather than the Sheet, so it needs none either.',
+      'Never omit a credential argument to "let the gateway handle it". The gateway falls back to its own env when an argument is missing, which means a silently-omitted token does not fail loudly — it quietly reads or writes whatever Sheet and mailbox the SERVER is configured for, which may not be the owner\'s. agents/liangzai.md says this in those words.',
+      'setup Step 3i (new): collect SUMMARY_RECIPIENTS from the owner and save it locally. It was previously handed to Five Bucks to set in Vercel and never stored here. It is the allowlist that stands between a bug and an email landing at a supplier — from the mailbox those suppliers write to — so the setup now asks for it explicitly and keeps it to the owner.',
+      'setup Step 3 retitled from "Google access for downloads": downloads are now the minor use of those credentials, since every gateway call carries them.',
+      'plugin-update gained an 8th check (recipient allowlist) and its check #2 widened from "local Google token" to all four Google credentials, since every one of them now travels to the gateway. Its "All six checks" line was also miscounting a seven-row table before this.',
+      'OAuth rewrite (was uncommitted from an earlier session, shipped here): google_oauth.py drops the loopback HTTP server for two commands — --auth-url prints the sign-in link, --exchange "<url>" takes the redirect URL out of the owner\'s address bar. The old flow needed a free port, a browser that could reach it, and a terminal held open for five minutes. The "This site can\'t be reached" page IS the handoff — Google puts the code nowhere but that address bar — and setup Step 3g now warns him of that in advance, because an owner who is not expecting it assumes he broke something and stops.',
+    ],
+  },
   {
     version: 'v0.5.1',
     date: 'Jul 13, 2026',

@@ -4,7 +4,11 @@ A **Claude plugin** for Liang Zai Prawn Noodle's back-office: capture supplier i
 Loyverse sales, reconcile each month's Statements of Account line-by-line, and track supplier
 cost per bowl. The skills run inside the owner's own Claude Cowork project and drive the
 private [liangzai-gateway](https://github.com/Introduse/liangzai-gateway) MCP server, which
-holds every credential and does all the Sheet/Loyverse/Gmail work.
+does all the Sheet/Loyverse/Gmail work.
+
+The credentials are split between the two. The gateway holds the Loyverse token. The Google
+and mailer credentials live *here*, in the project's `.claude/settings.local.json`, and
+travel to the gateway as arguments on every call.
 
 Built by [Five Bucks Ventures](https://fivebucksventures.com).
 
@@ -33,7 +37,11 @@ liangzai-agents (THIS REPO — the plugin)         liangzai-gateway (remote MCP,
 Only two scripts run locally, on the owner's machine: `download_invoices.py` (Claude reads
 the downloaded PDFs to extract line items) and `google_oauth.py` (one-time consent to mint
 the Google refresh token). Everything else — reconciliation, cost math, all Sheet/Loyverse/
-Gmail calls — happens in the gateway, where the credentials live and never leave.
+Gmail calls — happens in the gateway.
+
+Those gateway calls carry the Google and mailer credentials with them, read out of
+`.claude/settings.local.json` on each request. `agents/liangzai.md` lists which argument
+maps to which key, and which tools need them.
 
 ## The skills
 
@@ -85,7 +93,11 @@ and every read stays inside the window.
 
 ## The gateway
 
-All the logic and credentials live in the private
+All the reconciliation and cost logic lives in the private
 [liangzai-gateway](https://github.com/Introduse/liangzai-gateway) — a Next.js + `mcp-handler`
-MCP server on Vercel. Deploy it, set its env vars, register `https://<app>.vercel.app/api/mcp`
-as a Cowork custom connector, and put that URL in `plugins/liangzai/.mcp.json`.
+MCP server on Vercel. Deploy it, register `https://<app>.vercel.app/api/mcp` as a Cowork
+custom connector, and put that URL in `plugins/liangzai/.mcp.json`.
+
+It needs three env vars of its own: `GATEWAY_API_KEY_SHA256`, `SPREADSHEET_ID`, and
+`LOYVERSE_ACCESS_TOKEN`. The Google and mailer vars can also be set there, but only as a
+fallback for calls that omit them — this plugin sends its own on every call.
