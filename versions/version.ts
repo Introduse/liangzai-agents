@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.10.0';
+const DEFAULT_VERSION = 'v0.11.0';
 const DEFAULT_DATE = 'Jul 13, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,16 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.11.0',
+    date: 'Jul 13, 2026',
+    changes: [
+      'Weekly capture and monthly close now split cleanly: weekly classifies each mailbox attachment and logs only invoices, leaving statements for month end; monthly logs the statements plus any straggler invoice, then reconciles.',
+      'New gateway tool liangzai_logged_attachments — call it before extracting anything, skip every attachment it names. This is the document-level dedupe that guards against the row-level source_ref key drifting when a re-extraction reorders or merges lines.',
+      'supplier-invoice-manager and agents/liangzai.md now spell out the invoice-vs-statement classification rule after a real run misfiled a Statement of Account into invoice_log — reconciliation does not filter on status, so a misfiled statement invents a variance that is not real.',
+      'plugin-update gained a check for tabs the pre-v0.11.0 gateway could have corrupted (header not in row 1) and renumbered its checklist accordingly.',
+    ],
+  },
   {
     version: 'v0.10.0',
     date: 'Jul 13, 2026',

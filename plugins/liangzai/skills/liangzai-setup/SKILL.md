@@ -236,9 +236,15 @@ that the mailbox account can edit it. Then:
 > Call **`liangzai_init_sheet`**.
 
 It creates `invoice_log`, `soa_entries`, `reconciliation`, `reconciliation_detail`,
-`sales_daily`, `cost_tracking`, and `agent_config` with bilingual headers and the
-payment-status dropdown. Idempotent. **This must run before Step 5** — `loyverse_stores
-write_config` writes the outlet map into `agent_config`, which only exists once this runs.
+`sales_daily`, `cost_tracking`, and `agent_config` with bilingual headers, the
+payment-status dropdown on `reconciliation`, and the 状态 Status dropdown on `invoice_log`
+and `soa_entries`. Idempotent, and safe to re-run on a Sheet that already has tabs — it
+fully styles only the tabs it creates (so it never stomps formatting the owner has changed),
+but it ensures the dropdowns on tabs that already exist, because those are a data contract
+rather than decoration.
+
+**This must run before Step 5** — `loyverse_stores write_config` writes the outlet map into
+`agent_config`, which only exists once this runs.
 
 ## Step 5 — Loyverse & outlet map
 
@@ -427,6 +433,10 @@ Then call liangzai_send_run_report with job: "weekly_capture", a summary of what
 logged, and anything that needs the owner in needs_owner. Send the report even if
 there was nothing to log — a silent run is indistinguishable from a broken one.
 ```
+
+**The weekly job captures only — it never reconciles, and it never logs a statement.** It
+classifies each attachment: invoices are logged, statements are counted and left for the
+monthly close, and anything that is neither is reported and written nowhere.
 
 **Task 2 — `Liang Zai · Monthly close`** · frequency **Daily**, his time:
 
