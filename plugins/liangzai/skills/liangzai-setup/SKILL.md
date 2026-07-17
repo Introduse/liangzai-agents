@@ -377,21 +377,47 @@ if os.path.exists(pj):
 
 ### 9b. Patch CLAUDE.md idempotently
 
-Read `CLAUDE.md` at the workspace root (create if absent). Replace everything between the
-markers, or append the block if the markers aren't present:
+Read `CLAUDE.md` at the workspace root (create it fresh with the block below if absent).
 
-```
-<!-- BEGIN agents/liangzai.md (embedded by liangzai-setup) -->
-<!-- liangzai plugin: {plugin_version} | embedded: {embed_date} -->
+```python
+import os, re
 
-{body}
+new_block = (
+    "<!-- BEGIN agents/liangzai.md (embedded by liangzai-setup) -->\n"
+    f"<!-- liangzai plugin: {plugin_version} | embedded: {embed_date} -->\n"
+    "\n"
+    f"{body}\n"
+    "\n"
+    "<!-- END agents/liangzai.md -->"
+)
 
-<!-- END agents/liangzai.md -->
+claude_md = open("CLAUDE.md", encoding="utf-8").read() if os.path.exists("CLAUDE.md") else ""
+
+if "<!-- BEGIN agents/liangzai.md (embedded by liangzai-setup) -->" in claude_md:
+    # Case 1 — markers present: replace everything between (and including) them.
+    claude_md_new = re.sub(
+        r'<!-- BEGIN agents/liangzai\.md \(embedded by liangzai-setup\) -->.*?<!-- END agents/liangzai\.md -->',
+        lambda m: new_block,   # lambda avoids re.sub's backslash interpretation in `body`
+        claude_md, count=1, flags=re.DOTALL,
+    )
+else:
+    # Case 2 — markers absent, including a brand-new file: PREPEND above all existing
+    # content. The agent identity must lead the file, not trail whatever else is there.
+    claude_md_new = new_block + ("\n\n" + claude_md if claude_md else "\n")
+
+open("CLAUDE.md", "w", encoding="utf-8").write(claude_md_new)   # show the diff first
 ```
 
 Embed the **content**, not a path reference, so the workspace is self-contained for
 scheduled runs and fresh clones. Re-running setup or upgrading the agent just refreshes
 the block. Surface any write failure now, before Step 10.
+
+### 9c. Verify
+
+Read `CLAUDE.md` back and confirm the version stamp matches `plugin_version` and that a
+string unique to the current `agents/liangzai.md` body (e.g. its latest Maintenance
+version) appears inside the markers. If it doesn't, the body wasn't actually replaced —
+re-read the file and retry rather than reporting this step as done.
 
 ## Step 10 — Schedule & hand over
 

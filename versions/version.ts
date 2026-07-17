@@ -1,8 +1,8 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.11.0';
-const DEFAULT_DATE = 'Jul 13, 2026';
+const DEFAULT_VERSION = 'v0.11.1';
+const DEFAULT_DATE = 'Jul 17, 2026';
 
 // Export constants initially with default values
 export const APP_VERSION = DEFAULT_VERSION;
@@ -11,6 +11,15 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.11.1',
+    date: 'Jul 17, 2026',
+    changes: [
+      'liangzai-setup Step 9b\'s CLAUDE.md embed now PREPENDS instead of appending when the BEGIN/END markers are absent, matching the fix adana-skills-library made to adana-setup (v0.2.4): the agent identity must lead the file, not trail whatever else is there. Replaced the prose-only instruction with actual code, including the same `lambda m: new_block` re.sub guard that avoids backslash-interpretation corruption when replacing between existing markers.',
+      'New Step 9c explicitly verifies the embed after writing — confirms the version stamp and a body-unique string actually landed — instead of trusting the write silently succeeded.',
+      'plugin-update Step 4 updated to match: prepend-not-append is now explicit, and it verifies the refreshed embed via the new liangzai-setup Step 9c rather than assuming the write worked.',
+    ],
+  },
   {
     version: 'v0.11.0',
     date: 'Jul 13, 2026',

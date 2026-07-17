@@ -90,11 +90,18 @@ complete:
 
 ## Step 4 — Refresh the CLAUDE.md embed (if stale or missing)
 
-If Step 0 found the embed missing or on an older version, re-run **liangzai-setup Step 9**:
-locate `agents/liangzai.md`, strip its frontmatter, and replace the block between the
-`BEGIN/END agents/liangzai.md` markers in the workspace `CLAUDE.md`. Stamp the Step 0
-version into the marker so the next `plugin-update` can compare. This refreshes the agent
-identity without disturbing anything the user added manually.
+If Step 0 found the embed missing or on an older version, re-run **liangzai-setup Steps
+9a–9b**: locate `agents/liangzai.md` and strip its frontmatter (9a), then replace the
+block between the `BEGIN/END agents/liangzai.md` markers in the workspace `CLAUDE.md` —
+**prepending** it if the markers are absent entirely, never appending, so the agent
+identity leads the file rather than trailing whatever else is there (9b). Stamp the Step
+0 version into the marker so the next `plugin-update` can compare. This refreshes the
+agent identity without disturbing anything the user added manually.
+
+**Verify:** read `CLAUDE.md` back and confirm the stamp matches the Step 0 version, and
+that a string unique to the current `agents/liangzai.md` body appears inside the markers
+(liangzai-setup Step 9c). If it doesn't, the body wasn't actually replaced — retry before
+reporting this gap as filled.
 
 ## Step 5 — Re-validate & record
 
