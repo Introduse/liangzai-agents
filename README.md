@@ -49,7 +49,7 @@ maps to which key, and which tools need them.
 |---|---|
 | `liangzai-setup` | First-run onboarding: connect the gateway, mint the local Google token, create the Sheet, confirm the bowl definition, and embed the agent into the workspace `CLAUDE.md` |
 | `supplier-invoice-manager` | **Weekly** — download + extract invoices → `liangzai_append_invoice_log`. **Monthly** — extract statements, `liangzai_run_reconciliation`, `liangzai_send_summary` |
-| `cost-optimizer` | **Weekly** — `liangzai_capture_sales`. **Monthly** — `liangzai_compute_cost_per_bowl` |
+| `cost-optimizer` | **Weekly** — `liangzai_capture_sales`. **Monthly** — `liangzai_compute_cost_per_bowl`. **Ad hoc** — `liangzai_daily_sales` for live per-outlet sales in SGD |
 | `plugin-update` | Idempotent catch-up after an upgrade — detects gaps (connector, token, tabs, outlet map, bowl definition, CLAUDE.md embed) and fills only what's missing |
 
 `agents/liangzai.md` defines the agent identity; `liangzai-setup` embeds it into the
@@ -98,6 +98,7 @@ All the reconciliation and cost logic lives in the private
 MCP server on Vercel. Deploy it, register `https://<app>.vercel.app/api/mcp` as a Cowork
 custom connector, and put that URL in `plugins/liangzai/.mcp.json`.
 
-It needs three env vars of its own: `GATEWAY_API_KEY_SHA256`, `SPREADSHEET_ID`, and
-`LOYVERSE_ACCESS_TOKEN`. The Google and mailer vars can also be set there, but only as a
-fallback for calls that omit them — this plugin sends its own on every call.
+It needs two env vars of its own: `GATEWAY_API_KEY_SHA256` and `LOYVERSE_ACCESS_TOKEN`. The
+Google, mailer, and `SPREADSHEET_ID` vars can also be set there, but only as a fallback for
+calls that omit them — this plugin sends its own (including `spreadsheet_id`, recorded in
+`.claude/settings.local.json` at setup) on every call.

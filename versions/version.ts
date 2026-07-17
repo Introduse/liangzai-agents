@@ -1,8 +1,8 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.11.1';
-const DEFAULT_DATE = 'Jul 17, 2026';
+const DEFAULT_VERSION = 'v0.12.0';
+const DEFAULT_DATE = 'Jul 18, 2026';
 
 // Export constants initially with default values
 export const APP_VERSION = DEFAULT_VERSION;
@@ -11,6 +11,14 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.12.0',
+    date: 'Jul 18, 2026',
+    changes: [
+      'Surfaced the gateway\'s new liangzai_daily_sales tool to the agent: added it to the tool table in agents/liangzai.md (which plugin-update reads as the complete list), gave cost-optimizer a "daily sales (live snapshot, ad hoc)" mode so "how much did we sell today?" routes there, and named it as the newest tool in plugin-update\'s stale-connector check. It answers a revenue question (per-outlet SGD, today included), distinct from cost-per-bowl, and is read-only.',
+      'The target Sheet id is now recorded client-side. liangzai-setup Step 4 records SPREADSHEET_ID into .claude/settings.local.json (4a) before creating the tabs (4b), and agents/liangzai.md sends spreadsheet_id on every Sheet call alongside the Google credentials. The gateway falls back to its own Vercel SPREADSHEET_ID only when no argument is sent, so the setup no longer depends on a value the owner can\'t see. plugin-update gained detection (#11) and a fill step for it, with the note that a missing local id is only fatal when the gateway env lacks it too.',
+    ],
+  },
   {
     version: 'v0.11.1',
     date: 'Jul 17, 2026',

@@ -42,6 +42,7 @@ call to the tools listed:
 | `google_client_id` | `GOOGLE_CLIENT_ID` | every tool below except `liangzai_ping` |
 | `google_client_secret` | `GOOGLE_CLIENT_SECRET` | same |
 | `sheets_refresh_token` | `SHEETS_REFRESH_TOKEN` | same |
+| `spreadsheet_id` | `SPREADSHEET_ID` | same |
 | `gmail_refresh_token` | `GMAIL_REFRESH_TOKEN` | `liangzai_send_summary`, `liangzai_send_run_report` |
 | `supplier_mailbox` | `SUPPLIER_MAILBOX` | same two |
 | `summary_recipients` | `SUMMARY_RECIPIENTS` | same two |
@@ -72,6 +73,7 @@ a **stale connector**, not a missing gateway feature.
 | `liangzai_bowl_checklist` | What sold, grouped into **dishes**, each with a short `ref` (d001…). You classify the dish; the gateway holds the Loyverse ids. **Writes** — it saves the ref→id map |
 | `liangzai_set_bowl_definition` | Record the confirmed bowl definition. Pass `bowl_refs`; the gateway expands each into every id behind that dish |
 | `liangzai_capture_sales` | Record the week's Loyverse sales into `sales_daily` |
+| `liangzai_daily_sales` | Live per-outlet sales in SGD for a day or trailing window, straight from Loyverse. Read-only — the "how much did each stall take today" figure, not the cost-per-bowl one |
 | `liangzai_logged_attachments` | Which attachments are already in a tab. **Call it before extracting anything** — skip those; do not re-read them |
 | `liangzai_append_invoice_log` | Append extracted invoice line items |
 | `liangzai_append_soa_entries` | Append extracted Statement-of-Account rows |

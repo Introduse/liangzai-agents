@@ -5,9 +5,10 @@ description: >-
   that week's Loyverse sales into the tracking Sheet; run monthly to tally those sales
   into bowls, pair each outlet's bowls with its reconciled supplier cost, and write
   cost-per-bowl. Use whenever the user asks about cost per bowl, margin, bowls sold,
-  Loyverse sales, or which outlet is getting more expensive.
+  Loyverse sales, how much an outlet sold today or this week, or which outlet is getting
+  more expensive.
 area: Cost
-use_for: "Weekly: record Loyverse sales per item per outlet per day. Monthly: tally bowls, pair with reconciled cost, write cost/bowl."
+use_for: "Weekly: record Loyverse sales per item per outlet per day. Monthly: tally bowls, pair with reconciled cost, write cost/bowl. Ad hoc: live per-outlet sales in SGD for today or a trailing window."
 ---
 
 # Cost Optimizer
@@ -113,3 +114,32 @@ days are gone for good and he needs to know today, not at month end. Don't send 
 email.
 
 `monthly` needs no report of its own: the monthly close ends with `liangzai_send_summary`.
+
+## Mode: daily sales (live snapshot, ad hoc)
+
+Separate from everything above. When the owner asks *"how much did we sell today?"* — or this
+week, or per outlet — that is a **revenue** question, not a cost-per-bowl one, and it has its
+own tool. Nothing here writes to the Sheet or sends an email; it is just an answer to a
+question he asked.
+
+> Call **`liangzai_daily_sales`** (`days: 1` = today only, the default; `days: 7` = the
+> trailing week; max 30, the Loyverse wall).
+
+It reads Loyverse **live and writes nothing** — it does not touch `sales_daily`, and it is
+not the weekly capture. Three things to hold onto when you report it:
+
+- **It is money, not bowls.** `sales` is net revenue in SGD (refunds subtracted), summed per
+  receipt — the figure the owner cross-checks against each till. It says nothing about cost or
+  margin; don't blur it with cost-per-bowl. None of the cost-per-bowl reporting above applies.
+- **Today is partial.** The current day runs to *now*, not to close, so today's total keeps
+  climbing. Say so, and don't compare a half-day against yesterday's full day as if it were a
+  drop.
+- **`gst_charged` is false**, because the owner's Loyverse charges no GST — so the sales
+  figure carries no tax to strip out. If it ever flips true, the numbers change meaning and
+  you should flag it, not silently report a tax-inclusive total as revenue.
+
+An outlet that shows **no receipts at all** for a day it should be trading is worth a line to
+the owner — it usually means that till didn't sync, not that it sold nothing.
+
+Report per outlet plus a total; lead with nothing in particular — he is reading the tills,
+not hunting a problem.

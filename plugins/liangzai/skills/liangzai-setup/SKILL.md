@@ -228,10 +228,29 @@ owner.
 | `Internal` is greyed out | Not signed in with a Google Workspace account. Sign in with one. |
 | Token stops working after ~7 days | The app was left **External / Testing**. Recreate it as **Internal** (3c). |
 
-## Step 4 — Create the Sheet
+## Step 4 — Record the Sheet, then create its tabs
 
-Confirm the gateway's `SPREADSHEET_ID` points at the *Invoice log and Cost tracker* and
-that the mailbox account can edit it. Then:
+### 4a. Record which Sheet to use
+
+The gateway writes to whichever Google Sheet you name. It reads a **`spreadsheet_id`** you
+send on every call (out of `.claude/settings.local.json`, exactly like the Google
+credentials from Step 3); only if you send none does it fall back to a `SPREADSHEET_ID` set
+in the gateway's own Vercel env. Recording it locally is what points the whole system at
+*this owner's* Sheet — so do it here, before the first Sheet call.
+
+> Ask the owner for the **Invoice log and Cost tracker** Sheet — the link to it. It looks
+> like `https://docs.google.com/spreadsheets/d/`**`<the id>`**`/edit`. The id is the long
+> segment between `/d/` and `/edit`.
+
+Write that id as **`SPREADSHEET_ID`** into the `env` block of `.claude/settings.local.json`,
+next to the values Step 3 wrote. Confirm the mailbox account (the one you authorised in
+Step 3) can actually edit the Sheet — if it can't, every write fails later with a
+permission error, not a wrong-id error.
+
+**If the owner has no Sheet yet**, have him make an empty Google Sheet, share edit access
+with the mailbox account, and give you its link — Step 4b fills it with the tabs.
+
+### 4b. Create the tabs
 
 > Call **`liangzai_init_sheet`**.
 

@@ -46,7 +46,7 @@ All the checks below are read-only. Run them, then tag each item **present / mis
 | # | Item | How to check | Reads as missing when |
 |---|---|---|---|
 | 1 | Gateway connector + key | **`liangzai_ping`** | Anything other than `pong` — the connector isn't installed, or the key is wrong |
-| 2 | Connector is not **stale** | Compare the `liangzai_*` tools you can actually see against the tool table in `agents/liangzai.md`. The gateway advertises every tool in that table | A tool from the table is missing from your tool list. That means the connector cached an old tool list — **the fix is to reconnect it** (Settings → Connectors → remove `gateway`, add it again), NOT a change to the gateway. Never report a missing tool as a gateway gap without checking this first. After a plugin upgrade this is the FIRST thing to check: `liangzai_logged_attachments`, `liangzai_list_suppliers` and `liangzai_merge_suppliers` are all recent, and an old connector will simply not show them |
+| 2 | Connector is not **stale** | Compare the `liangzai_*` tools you can actually see against the tool table in `agents/liangzai.md`. The gateway advertises every tool in that table | A tool from the table is missing from your tool list. That means the connector cached an old tool list — **the fix is to reconnect it** (Settings → Connectors → remove `gateway`, add it again), NOT a change to the gateway. Never report a missing tool as a gateway gap without checking this first. After a plugin upgrade this is the FIRST thing to check: `liangzai_daily_sales` (newest), `liangzai_logged_attachments`, `liangzai_list_suppliers` and `liangzai_merge_suppliers` are all recent, and an old connector will simply not show them |
 | 3 | Google credentials | Look for `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` and `SHEETS_REFRESH_TOKEN` in the workspace `.claude/settings.local.json`. The local invoice download needs them, and every `liangzai_*` call sends them to the gateway — see `agents/liangzai.md` | Any of the four is absent or empty |
 | 4 | Sheet tabs | **`liangzai_init_sheet`** with `dry_run: true` — it inspects the live Sheet and returns `present` and `missing` | `missing` is non-empty. `agent_config` in `missing` means this setup predates the gateway |
 | 5 | Tabs are well-formed | **You cannot probe this read-only** — no tool reads an arbitrary tab. It surfaces on the next real write: gateway v0.11.0 REFUSES to write when row 1 of a tab is not the header, and names the tab | A `liangzai_append_*` call errors with `REFUSING to write`. That tab was written by the pre-v0.11.0 gateway, which could push the header below the data. Note it here so the owner isn't surprised by it later |
@@ -55,8 +55,15 @@ All the checks below are read-only. Run them, then tag each item **present / mis
 | 8 | Scheduled tasks | Open Cowork's **Scheduled** page (or ask him to) and look for `Liang Zai · Weekly capture` and `Liang Zai · Monthly close`. **No gateway tool can answer this** — Cowork owns the schedule, so this is the only place it can be seen | Either task is absent. An install predating plugin v0.8.0 may have neither |
 | 9 | CLAUDE.md embed | Does the workspace `CLAUDE.md` contain the `BEGIN/END agents/liangzai.md` block, and is its stamped version the one from Step 0? | Block absent, or stamped version is older |
 | 10 | Recipient allowlist | Look for `SUMMARY_RECIPIENTS` in `.claude/settings.local.json` (sent on every `liangzai_send_summary` / `liangzai_send_run_report` call) | Key absent or empty |
+| 11 | Sheet id recorded | Look for `SPREADSHEET_ID` in `.claude/settings.local.json` — it is sent on every Sheet call and points the gateway at this owner's Sheet | Key absent or empty. Not always fatal — see the note below — but recording it is the normal path now |
 
 Notes:
+- **#11 (`SPREADSHEET_ID`) is only *fatal* when the gateway's own env lacks it too.** The
+  gateway falls back to a Vercel `SPREADSHEET_ID` when the client sends none, so an older
+  install with nothing in `settings.local.json` may still be working off that fallback. Record
+  it locally anyway: it makes the setup self-contained and stops it depending on gateway-side
+  config the owner can't see. If Sheet calls currently succeed, treat a missing #11 as a
+  recommended fill, not a broken setup.
 - **#6 and #7 are one `liangzai_get_config` call**, not two. It writes nothing. #8 is NOT
   one of them — the schedule lives in Cowork and the gateway cannot see it.
 - If a `liangzai_*` tool comes back as unknown, **check #2 before blaming the gateway.**
@@ -81,6 +88,7 @@ complete:
 |---|---|
 | Gateway connector / key | **liangzai-setup Step 2** |
 | Google credentials | **liangzai-setup Steps 3g–3h** — `google_oauth.py --auth-url`, he signs in and pastes back the URL he lands on, then `google_oauth.py --exchange "<url>"`. There is no bare invocation any more; running the script with no flag just errors. The whole Google Cloud console walk (3a–3f) is only needed if the OAuth **client** is gone too — if `GOOGLE_CLIENT_ID` is already in `settings.local.json`, the client exists and you only need to re-mint the token |
+| Sheet id (`SPREADSHEET_ID`) | **liangzai-setup Step 4a** — ask the owner for the *Invoice log and Cost tracker* Sheet link, take the id from the `/d/<id>/edit` segment, and write `SPREADSHEET_ID` into `.claude/settings.local.json`. Do this **before** the Sheet-tabs fill below, so `liangzai_init_sheet` targets the right Sheet |
 | Sheet tabs | **`liangzai_init_sheet`** (no `dry_run`) — creates only the missing tabs and fully styles only those, so it never stomps formatting the owner has changed. It DOES ensure the 状态 Status dropdown on the tabs that already exist: that is a data contract, not decoration |
 | Outlet map | **`liangzai_loyverse_stores`** with `write_config: true` |
 | Bowl definition | **liangzai-setup Step 6** — `liangzai_bowl_checklist`, classify each **dish** with the rule there (a meal is a bowl; packaging, drinks, add-ons, sides, staff meals are not), submit the **`bowl_refs`** of the bowl dishes (the gateway expands each ref into every Loyverse id behind that dish), and show him the finished classification. Don't put the taxonomy question to him, and don't confirm it without showing him |
