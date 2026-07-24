@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
 """One-time OAuth consent for the supplier mailbox.
 
-Mints a refresh token for two scopes:
+Mints a refresh token for two scopes, both of which are used by the GATEWAY:
 
-  gmail.readonly  — the Gmail MCP connector cannot download attachment bytes,
-                    and supplier invoices arrive as PDF/photo attachments.
-                    Read-only means we never label, move, or delete mail.
+  gmail.readonly  — the gateway's mailbox poller reads supplier invoices and
+                    statements out of the shared mailbox and queues them for
+                    extraction. Read-only means it never labels, moves, or
+                    deletes mail.
   gmail.send      — sends the Reconciliation Summary from the mailbox itself,
                     which is the From: line the proposal promised. Send-only:
                     it grants no read access and cannot touch drafts.
 
 There used to be a third, `spreadsheets`, for the tracking Sheet. The Sheet is
 gone — the gateway keeps its data in Postgres — so the scope is no longer
-requested and SHEETS_REFRESH_TOKEN is no longer written. A token minted before
-this change still works: the extra scope is unused, not harmful.
+requested. A token minted before this change still works: the extra scope is
+unused, not harmful.
 
-The token lands in two places, for two different consumers: this machine's
-settings file, for `download_invoices.py`, which runs here; and the gateway's
-Vault, for the summary mailer, which does not. `/liangzai-setup` Step 3j does
-the second half — this script only does the first.
+THIS SCRIPT SAVES NOTHING. It prints the refresh token, and `/liangzai-setup`
+Step 3j puts it in the gateway's Vault with `liangzai_store_credential`. There
+is no local consumer any more — the mail fetching moved server-side — and a
+credential written to a file that nothing reads is two problems, not none: a
+secret sitting on disk for no reason, and a gap check that can never be
+satisfied because the thing meant to fill it writes somewhere nobody looks.
+
+What this script DOES read locally, and all it reads: GOOGLE_CLIENT_ID,
+GOOGLE_CLIENT_SECRET and OAUTH_ACCOUNT from .claude/settings.local.json.
 
 Scope classification, since it decides everything below: gmail.readonly is
 RESTRICTED (external apps need an annual third-party security assessment);
@@ -31,7 +37,7 @@ TWO COMMANDS, NO LOCAL SERVER.
 
     python3 scripts/oauth/google_oauth.py --exchange "<the URL he lands on>"
         Takes the redirect URL out of his address bar, pulls the ?code= out of
-        it, swaps it for a refresh token, and saves.
+        it, swaps it for a refresh token, and PRINTS it. Setup Step 3j stores it.
 
 The redirect still points at http://localhost:5179 — the URI registered on the
 OAuth client — but nothing is listening there, so the browser will show
@@ -49,8 +55,8 @@ THE OAUTH CLIENT MUST BE "INTERNAL". This is not a preference.
 `gmail.readonly` is a Google *restricted* scope. An EXTERNAL OAuth client using it
 needs brand verification, scope verification, and an annual third-party CASA
 security assessment. Leaving the app in "Testing" to avoid that caps refresh-token
-lifetime at 7 DAYS — so the weekly job would run once and then die silently,
-forever, while appearing to be configured correctly.
+lifetime at 7 DAYS — so the gateway would poll the mailbox for a week and then
+stop, silently and for ever, while appearing to be configured correctly.
 
 An OAuth client created inside a Google Workspace org with user type **Internal**
 is exempt from verification, from the test-user cap, and from the 7-day expiry.
@@ -62,7 +68,6 @@ import os
 import sys
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
 # pyrefly: ignore [missing-import]
@@ -74,13 +79,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
 ]
-SETTINGS = Path(__file__).resolve().parents[2] / ".claude" / "settings.local.json"
-
-
-def save(**kv):
-    data = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
-    data.setdefault("env", {}).update(kv)
-    SETTINGS.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def build_auth_url(cid, expected):
@@ -161,14 +159,16 @@ def exchange(pasted):
         email = json.load(r).get("emailAddress", "")
     if email.lower() != expected:
         raise SystemExit(f"Consented as {email!r}, but OAUTH_ACCOUNT is {expected!r}. "
-                         "Nothing saved — re-run and pick the right account, or fix "
+                         "Nothing printed — re-run and pick the right account, or fix "
                          "OAUTH_ACCOUNT in .claude/settings.local.json.")
 
-    save(GMAIL_REFRESH_TOKEN=refresh)
-    print(f"OK — consented as {email}. Refresh token saved to .claude/settings.local.json\n"
-          "NEXT: this is the LOCAL copy, used by download_invoices.py. The gateway needs "
-          "its own — store it with liangzai_store_credential (setup Step 3j) or the "
-          "summary email cannot send.")
+    print(f"OK — consented as {email}.\n\n"
+          f"GMAIL_REFRESH_TOKEN={refresh}\n\n"
+          "NOT SAVED ANYWHERE. This token has exactly one consumer, and it is not this\n"
+          "machine: store it in the gateway's Vault with liangzai_store_credential\n"
+          "(service: gmail_refresh_token — setup Step 3j). Until you do, the gateway can\n"
+          "neither read the supplier mailbox nor send the summary email.\n"
+          "Lost it? Nothing is broken — just re-run --auth-url.")
 
 
 def main():

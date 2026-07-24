@@ -114,26 +114,28 @@ they happen*, resuming from the last recorded day.
 
 Three consequences, all load-bearing:
 
-- **`sales_daily` stores net quantity per item, not a bowl count.** Receipts can never be
-  re-read past the window, so a stored bowl count would permanently freeze whatever bowl
+- **`daily_item_sales` stores net quantity per item, not a bowl count.** Receipts can never
+  be re-read past the window, so a stored bowl count would permanently freeze whatever bowl
   definition was current on the day. Storing item quantities keeps the definition a
   **revisable view over durable data** — change it later and history re-derives correctly
   instead of being corrupted.
 - **A missed run beyond the window loses that period permanently.** Runs backfill and say
-  so loudly when they cannot reach far enough back.
+  so loudly when they cannot reach far enough back. It is not only bowls that go: the same
+  run records **`daily_sales`**, the per-stall daily revenue, and nothing else in the system
+  can reconstruct that day once the window closes.
 - Months before the agent started **do not have a cost per bowl** and never will. They are
   not estimated.
 
-Rows are keyed `{outlet}|{date}|{item_id}|{variant}` and are idempotent — a re-run
-corrects rather than duplicates. Dates are bucketed by **local (SGT, UTC+8) calendar day**,
-not UTC, so a late-evening sale lands on the day it was actually sold.
+Rows are keyed by outlet, date, item and variant, and are idempotent — a re-run corrects
+rather than duplicates. Dates are bucketed by **local (SGT, UTC+8) calendar day**, not UTC,
+so a late-evening sale lands on the day it was actually sold.
 
 ### 3. Count the bowls
 
 For a given month and outlet:
 
-> **bowls sold** = the sum of net quantity, over every `sales_daily` row whose `item_id` is
-> in the confirmed `bowl_items`, for that outlet, within that month.
+> **bowls sold** = the sum of net quantity, over every `daily_item_sales` row whose
+> `item_id` is in the confirmed `bowl_items`, for that outlet, within that month.
 
 **Net** quantity: refunds subtract. A refunded bowl was not a bowl sold.
 
@@ -155,7 +157,7 @@ silently sets the number the owner trusts, and an unconfirmed guess printed as f
 worse than no number at all. The agent classifies, then shows him the finished list once —
 *"I'm counting these as a bowl, and not these"* — and he can correct it in a sentence.
 
-The definition is **versioned**. Because `sales_daily` is item-level, a correction six
+The definition is **versioned**. Because the sales are stored item by item, a correction six
 months from now re-derives history correctly. Getting it wrong today is recoverable;
 publishing it unconfirmed is not.
 
@@ -168,7 +170,7 @@ publishing it unconfirmed is not.
 - It covers **only the suppliers in the automated flow**. Suppliers the owner keeps manual
   are excluded, by his own choice.
 - It contains **no rent, no labour, no utilities**.
-- It is therefore *supplier cost per bowl, for tracked suppliers* — and the Sheet, the
+- It is therefore *supplier cost per bowl, for tracked suppliers* — and the stored row, the
   email and every report say so.
 
 **It is never grossed up.** The untracked suppliers are a share of *suppliers*, not of

@@ -22,9 +22,9 @@ and **the gateway holds every credential** — in its own Vault, server-side. No
 call carries one; the only argument the agent ever sends is `gateway_api_key`.
 
 Setup's job with credentials is therefore to *put them there* (Step 3): mint the Google
-token on this machine, then hand it to the gateway. One copy stays local as well, because
-the invoice download still runs here and needs it — but the local copy is for that script
-alone, not for the gateway.
+token on this machine, then hand it to the gateway. **The token is not kept here.** Minting
+needs a browser and a human, which is why it happens on his machine at all; nothing local
+reads the result afterwards.
 
 Setup also connects the gateway and embeds the agent so every future session loads it. It
 is safe to re-run — every step checks whether it is already done.
@@ -44,8 +44,9 @@ so they can pause and resume anytime. The only exception is an explicit "skip".
 
 ## Step 1 — Work in a Project
 
-The local files the invoice download needs (the invoice cache,
-`.claude/settings.local.json`) live inside a Cowork project. Setup cannot run without one.
+The workspace files (`CLAUDE.md`, `.claude/settings.local.json`, and the folder the invoice
+PDFs are downloaded into at run time) live inside a Cowork project. Setup cannot run
+without one.
 
 > In Cowork, look below the chat input for **Projects** → **Create a new Project** →
 > **Use an existing folder**, pick the `liangzai-agents` folder, name it "Liang Zai".
@@ -62,8 +63,8 @@ Then have the user **open the project session** and re-run:
 
 ## Step 2 — Connect the gateway
 
-The gateway is where every write, the reconciliation, and the summary email happen. It
-must be connected first — every `liangzai_*` tool depends on it.
+The gateway is where the mailbox polling, every write, the reconciliation and the summary
+email happen. It must be connected first — every `liangzai_*` tool depends on it.
 
 > 1. **Settings → Connectors → "Add custom connector".**
 > 2. Name: `gateway`
@@ -77,14 +78,14 @@ when the key is valid. If not, the key or URL is wrong; stop and fix.
 
 ## Step 3 — Google access
 
-One Google consent, minted on this machine, serves two consumers. Locally,
-`download_invoices.py` uses it to fetch invoice attachments — the Gmail connector can't
-fetch attachment bytes, so that part has to run here. Server-side, the gateway uses it to
-send the reconciliation summary and the run reports.
+One Google consent, minted on this machine, used only by the gateway. It does two jobs
+there: **reads** the supplier mailbox (the mailbox poller queues each attachment for
+extraction) and **sends** the reconciliation summary and the run reports.
 
-So the token is minted here (3g–3h), saved here for the download, **and stored in the
-gateway's Vault (3j)**. Two copies of one credential, for two different jobs. The gateway
-never asks this machine for it at call time.
+Minting is the one part that cannot happen server-side — it needs a browser, a Google
+sign-in and a human clicking Allow. So the token is minted here (3g–3h) and **stored in the
+gateway's Vault (3j)**. It is not saved on this machine: nothing here reads it, and a
+copied secret nobody reads is only a liability.
 
 The OAuth client must be **Internal** to the Google Workspace — `gmail.readonly` is a
 restricted scope, and an External client left in Testing gets refresh tokens that
@@ -97,7 +98,7 @@ several near-identical menus and the wrong one is a dead end.
 ### 3a. Sign in and create the project
 
 > Go to <https://console.cloud.google.com> and sign in **as the supplier mailbox account**
-> (the same Workspace account the agents will read mail from).
+> (the same Workspace account the gateway will read mail from and send the summary as).
 >
 > Top bar → the project dropdown → **New Project**. Name it `liangzai-agents` → **Create**.
 > When it finishes, make sure that new project is **selected in the top bar** — everything
@@ -105,9 +106,9 @@ several near-identical menus and the wrong one is a dead end.
 
 ### 3b. Turn on the Gmail API
 
-Gmail is the only one needed — it reads invoice attachments and sends the summary. If it is
-off, the token mints fine but every call fails later with `API has not been used in project
-… before or it is disabled`.
+Gmail is the only one needed — the gateway reads invoice attachments with it and sends the
+summary with it. If it is off, the token mints fine but every call fails later with `API has
+not been used in project … before or it is disabled`.
 
 > Left menu → **APIs & Services → Library**.
 > Search **Gmail API** → click it → **Enable**.
@@ -170,14 +171,20 @@ that URL back (3g–3h). The failed page *is* the handoff.
 
 ### 3f. Save the credentials
 
-Write `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_ACCOUNT`, `SUPPLIER_MAILBOX` into
-`.claude/settings.local.json` under `env`. `OAUTH_ACCOUNT` is the supplier mailbox address —
-the consent below is refused under any other login, so a stray personal account can never
-quietly become the inbox the agent reads.
+Write exactly three values — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+`OAUTH_ACCOUNT` — into `.claude/settings.local.json` under `env`. `OAUTH_ACCOUNT` is the
+supplier mailbox address; the consent below is refused under any other login, so a stray
+personal account can never quietly become the inbox the gateway reads.
 
-These are what the local invoice download authenticates with, and what 3g–3h need in order
-to mint the token at all. They are copied to the gateway in 3j — this file is not what the
-gateway reads.
+**Those three, and nothing else.** They are what `google_oauth.py` reads in 3g–3h to mint
+the token; they are the only things on this machine anything still reads. The refresh token
+itself is not written here — 3h prints it and 3j puts it in the Vault. Anything else you
+were tempted to record locally has no reader, and a stored credential with no reader is a
+gap-check that can never be satisfied and a secret with no purpose.
+
+All three reach the gateway in 3j, two of them under the same name: `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` as `google_client_id` and `google_client_secret`, and
+`OAUTH_ACCOUNT`'s address as `supplier_mailbox`. This file is not what the gateway reads.
 
 ### 3g. Get the sign-in link and give it to him
 
@@ -210,8 +217,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/oauth/google_oauth.py --exchange "<the URL
 
 Quote the URL — it contains `&` and an unquoted shell will cut it in half. The script
 pulls the code out, swaps it for a refresh token, checks the account he actually signed in
-as matches `OAUTH_ACCOUNT`, and only then writes `GMAIL_REFRESH_TOKEN`. If the account
-doesn't match, it saves nothing and says so.
+as matches `OAUTH_ACCOUNT`, and only then **prints the refresh token**. If the account
+doesn't match, it prints nothing and says so.
+
+**Take the token straight to 3j.** The script writes it nowhere — it is a Vault value, and
+the only reason it passed through this machine is that Google will only hand it to a
+browser. If you lose it before 3j, just redo 3g–3h.
 
 **The code is single-use and expires in minutes.** If he took a coffee break, or you run
 the exchange twice, Google answers `invalid_grant` — that isn't a misconfiguration, just
@@ -229,8 +240,9 @@ owner.
 
 ### 3j. Hand the credentials to the gateway
 
-Everything so far is on this machine. The gateway sends the emails, and it reads its
-credentials from its own Vault — so until this step runs, it has nothing to send with.
+Everything so far is on this machine. The gateway reads the mailbox and sends the emails,
+and it reads its credentials from its own Vault — so until this step runs, it can do
+neither.
 
 > Call **`liangzai_store_credential`** once per value:
 >
@@ -238,8 +250,8 @@ credentials from its own Vault — so until this step runs, it has nothing to se
 > |---|---|
 > | `google_client_id` | `GOOGLE_CLIENT_ID` from 3f |
 > | `google_client_secret` | `GOOGLE_CLIENT_SECRET` from 3f |
-> | `gmail_refresh_token` | `GMAIL_REFRESH_TOKEN` from 3h |
-> | `supplier_mailbox` | `SUPPLIER_MAILBOX` from 3f |
+> | `gmail_refresh_token` | the refresh token 3h printed |
+> | `supplier_mailbox` | the mailbox address — the same one you put in `OAUTH_ACCOUNT` at 3f |
 > | `summary_recipients` | the list from 3i |
 
 Then call **`liangzai_list_credentials`** and confirm all five come back, plus
@@ -368,9 +380,11 @@ Confirm each connection with a low-cost call before handing over:
   setup gap — re-run Step 3j for the first five, and tell Five Bucks about the last.
 - **`liangzai_loyverse_stores`** → 6 stores, empty `missing`.
 - **`liangzai_capture_sales`** with `dry_run: true` → a receipt count, no write.
-- Locally: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/capture/download_invoices.py --days 7 --dry-run`.
-  If it finds nothing, suppliers haven't started sending to the mailbox yet — a business
-  step, not a bug.
+- **`liangzai_poll_mailbox`** with `{ days: 7, dry_run: true }` → a count of what *would* be
+  queued, nothing written and nothing stored. This is the end-to-end proof that 3j worked:
+  it is the gateway using the Google credentials you just gave it, against the real mailbox.
+  If it errors on a credential, re-do 3j. If it succeeds and finds nothing, suppliers haven't
+  started sending to the mailbox yet — a business step, not a bug.
 
 ## Step 9 — Initialize the workspace CLAUDE.md
 
@@ -530,10 +544,13 @@ empty basis. One task, in order, is what makes that impossible.
 Say this plainly — it is the one failure that cannot be undone:
 
 > These jobs only run while this computer is on. If it's off on the day, the job is
-> missed. Missing one week is survivable — the next run catches up the sales it missed.
+> missed. Your invoices are safe either way — they're collected on our server every day,
+> and they wait for you however long it takes. Missing one week is survivable: the next
+> run catches up the sales it missed too.
+>
 > **But Loyverse only keeps 30 days of sales.** If the computer is off for more than a
 > month, that month's sales are gone for good and we can never work out your cost per
-> bowl for it.
+> bowl for it. Sales are the only thing with a deadline.
 >
 > So: **you get an email every time a job finishes, even when there's nothing to report.**
 > That's on purpose. If a Sunday goes by and no email arrives, something is wrong — open

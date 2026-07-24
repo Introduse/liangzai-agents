@@ -5,15 +5,15 @@
     "email": "petric@fivebucksventures.com"
   },
   "metadata": {
-    "description": "Supplier invoice reconciliation and cost-per-bowl tracking for Liang Zai Kitchen. Skills drive the workflow; all database/Loyverse/Gmail-send work runs through the liangzai gateway MCP.",
-    "version": "0.14.1"
+    "description": "Supplier invoice reconciliation and cost-per-bowl tracking for Liang Zai Kitchen. Skills drive the workflow; the liangzai gateway MCP polls the supplier mailbox and does all database/Loyverse/Gmail work.",
+    "version": "0.15.0"
   },
   "plugins": [
     {
       "name": "liangzai",
       "source": "./plugins/liangzai",
       "description": "Liang Zai agents \u2014 capture supplier invoices and Loyverse sales, reconcile each month's Statements of Account line-by-line, and track supplier cost per bowl. Persists everything through the liangzai gateway MCP; it never approves and never pays.",
-      "version": "0.14.1",
+      "version": "0.15.0",
       "author": {
         "name": "Five Bucks Ventures",
         "email": "petric@fivebucksventures.com"

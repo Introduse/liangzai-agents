@@ -2,20 +2,20 @@
 name: supplier-invoice-manager
 description: >-
   Log Liang Zai's supplier invoices and reconcile them against each month's
-  Statements of Account. Run weekly to classify that week's mailbox attachments and log
-  the INVOICES, split by outlet — statements are left for month end.
+  Statements of Account. Run weekly to drain the gateway's ingestion queue, classify each
+  queued document, and log the INVOICES, split by outlet — statements are left for month end.
   Run monthly (after the 4th, when SOAs land) to log the statements, catch any
   straggler invoice, and match each supplier's statement line-by-line against what was
   logged. Use whenever the user says capture invoices, log invoices, reconcile, check the
   statement, month-end close, or asks why a supplier total does not match.
 area: Invoicing
-use_for: "Weekly: classify mailbox attachments, record INVOICES by outlet, defer statements. Monthly: log the statements + any straggler invoice, reconcile, flag variance, email the owner. Re-sending a document replaces it, so a re-run is safe."
+use_for: "Weekly: poll the mailbox, drain the pending queue, record INVOICES by outlet, defer statements, dismiss non-invoices with a reason. Monthly: log the statements + any straggler invoice, reconcile, flag variance, email the owner. Re-sending a document replaces it, so a re-run is safe."
 ---
 
 # Supplier Invoice Manager
 
-Two modes on two clocks. **Capture** weekly: classify the mailbox, log the invoices, leave
-the statements. **Reconcile** monthly: log the statements *and* any invoice the weekly run
+Two modes on two clocks. **Capture** weekly: drain the queue, log the invoices, leave the
+statements on it. **Reconcile** monthly: log the statements *and* any invoice the weekly run
 missed, then match them line by line.
 
 Both modes write, and both are safe to re-run: re-sending a document replaces what was
@@ -28,15 +28,19 @@ in this system. Every flagged item and every payment goes through the owner.
 
 Pass the plugin's `gateway_api_key` on every `liangzai_*` call. **That is the only
 argument you supply** — the gateway holds its own Google, mailbox and Loyverse credentials
-server-side. If a tool's schema still shows `spreadsheet_id` or `sheets_refresh_token`, the
-connector has cached an old tool list: reconnect it rather than filling the fields in.
+server-side. If a `liangzai_*` call comes back `unknown tool`, or a tool's schema still
+shows `spreadsheet_id` or `sheets_refresh_token`, the connector has cached an old tool
+list — **reconnect it**, and never report it as a missing gateway feature.
+`liangzai_poll_mailbox`, `liangzai_document_content` and `liangzai_mark_document` are the
+newest three, so on a stale connector this run fails at step 1 rather than anywhere
+subtle. `/plugin-update` checks exactly this.
 
 ---
 
 ## Classify before you write — this is where the last run went wrong
 
-The download fetches **every attachment** in the mailbox. It does not know an invoice from
-a statement, and neither does the database. **You** must, before a single row is written.
+The gateway's poller queues **every attachment** in the mailbox. It does not know an invoice
+from a statement, and neither does the database. **You** must, before a single row is written.
 
 The first live run misfiled a supplier's Statement of Account as an invoice, and the
 owner had to unpick it by hand. It is not merely untidy: **reconciliation does not filter on
@@ -53,10 +57,30 @@ statement line can ever match — and manufactures a variance that is not real.
 invoice even if someone typed "Statement" on it. A list of invoice numbers with no item
 detail is a statement even if it says "Invoice".
 
-**Never guess.** If it is genuinely ambiguous, or it is neither — a price list, a marketing
-PDF, a scan you cannot read — **write nothing** and report it by filename and sender. The
-owner is told, so nothing is silently dropped; but a non-money document never enters a money
-table, where reconciliation would pick it up and invent a variance.
+**Never guess.** A non-money document must never enter a money table, where reconciliation
+would pick it up and invent a variance. But writing nothing is only half the job:
+
+> **Neither an invoice nor a statement → call `liangzai_mark_document`
+> with `status: "not_an_invoice"` and a reason.** A price list, a marketing PDF, a delivery
+> note with no figures, a HeyGen receipt, a screenshot — the mailbox is shared with the
+> owner's ordinary mail, so this is routine and not an edge case.
+>
+> **A money document you genuinely cannot read → `status: "failed"`, with the reason.** A
+> scan too dark to read is still an invoice; it is not `not_an_invoice`. The other common
+> case is a format you cannot render — an `.xlsx` or `.docx` invoice. The poller queues
+> those deliberately rather than filtering them out, precisely so a supplier who changes
+> how they bill reaches a human instead of vanishing. Say which supplier and what format,
+> so the owner can ask them for a PDF.
+
+**Reporting it in prose is not enough, and this is the part that bites.** A document you
+leave `pending` stays on the worklist for ever, and from the month close onward *any*
+pending document blocks the close for **all six stalls** — an unextracted PDF has no known
+stall yet, so the gate cannot scope the block to one. Say it in your report *and* close it
+with the tool.
+
+**The one thing you must NOT close: a statement during the weekly run.** Statements are
+deliberately left `pending` so the monthly close finds them. That is the queue working, not
+a backlog to tidy. Never use `mark_document` to clear a readable money document off the list.
 
 ---
 
@@ -64,38 +88,80 @@ table, where reconciliation would pick it up and invent a variance.
 
 **The weekly run captures. It never reconciles, and it never appends a statement.**
 
-### 1. Download — locally
+### 1. Make the queue current
 
-```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/capture/download_invoices.py --days 7
-```
+> Call **`liangzai_poll_mailbox`** with `{ days: 7 }`.
 
-This runs on the owner's machine (the Gmail connector cannot fetch attachment bytes). It
-does I/O only: writes **every** attachment to `cache/<msg_id>/` and an index at
-`cache/manifest.json`. It never parses, and it makes no distinction between an invoice and
-a statement — that is your job, above.
+The gateway checks the mailbox itself — read-only; it never labels, moves or deletes mail.
+A cron does this daily too, but daily is not good enough for a weekly run: **call it here
+rather than trusting the queue to be current.** Re-running is free — a document already
+queued or already extracted is left exactly as it is, so the overlapping window costs
+nothing.
 
-### 2. Skip what is already recorded
+Two things in the response are worth reading rather than skimming:
+
+- **`capped: true`** means it stopped early and there is more mail behind it. Call it again.
+- **`duplicate_content`** counts attachments it recognised by their bytes and did not queue
+  twice. Mail threads re-attach everything on every reply, so one statement can arrive as
+  five Gmail attachments; the gateway collapses them. That number is normal, not a fault.
+
+### 2. Take the worklist
 
 > Call **`liangzai_pending_documents`**.
 
-**Skip every attachment named in `processed`.** Do not re-read the PDF, do not re-extract, do not
-re-append. See *The dedupe* below — this is what makes a re-run cheap, and it is not
-optional. (`pending` is empty until the gateway polls the mailbox itself; today the queue
-learns about a document when you append it, so `processed` is the field to read.)
+**`pending` is the work**, oldest first, each entry carrying `gmail_msg_id`,
+`attachment_id`, `filename`, `sender`, `mime_type`, `size_bytes` and `age_days`.
 
-### 3. Classify, then route
+**Skip every attachment named in `processed`.** Do not re-read the PDF, do not re-extract,
+do not re-append. See *The dedupe* below — this is what makes a re-run cheap, and it is not
+optional. (`processed` also covers documents dismissed with `liangzai_mark_document`, so a
+price list you closed last week never comes back.)
 
-Apply the rule above to each remaining attachment:
+**`failed` is documents a previous run gave up on.** Retry one only if you have reason to
+think it will read differently this time; otherwise leave it and name it in the report.
 
-- **Invoice** → extract it (step 4) and record it (step 5).
-- **Statement** → **do not append it.** The weekly run does not record statements. Count
-  it and say so: *"2 statements arrived — they'll be reconciled at month end."*
-- **Neither** → write nothing. Report the filename and sender.
+If `pending` is empty, check `last_poll` before saying it was a quiet week — a poller that
+stopped on Tuesday looks identical to a mailbox with no invoices in it.
 
-### 4. Extract — this is your job, not a tool's
+### 3. Fetch each pending document
 
-Read each `cache_path` from the manifest. You render PDFs and photos natively. Extract
+> For each entry, call **`liangzai_document_content`** with its `gmail_msg_id` and
+> `attachment_id` (omit `attachment_id` for an invoice in the mail body itself).
+
+It returns a **signed download URL valid for 15 minutes** — never the bytes, which would
+blow the response limit on exactly the biggest, most complex invoices. Download it and read
+the file:
+
+```
+mkdir -p cache && curl -sL "<download_url>" -o "cache/<gmail_msg_id>_<safe_filename>"
+```
+
+**Build `safe_filename` yourself — do not paste the supplier's.** `filename` is whatever
+they typed, and suppliers put spaces, slashes and Chinese characters in it. A `/` makes
+`curl` write into a directory that does not exist and fail; a space unquoted splits the
+argument. Keep the extension, replace anything that is not a letter, digit, dot, dash or
+underscore with `_`. Prefixing the `gmail_msg_id` also keeps two suppliers' `invoice.pdf`
+apart.
+
+Fetch and read one document at a time. If a URL has expired by the time you get to it, call
+`liangzai_document_content` again — it costs nothing.
+
+### 4. Classify, then route
+
+Apply the rule above to each downloaded document:
+
+- **Invoice** → extract it (step 5) and record it (step 6).
+- **Statement** → **do not append it, and do not mark it.** The weekly run does not record
+  statements; leaving it `pending` is how the monthly close finds it. Count it and say so:
+  *"2 statements arrived — they'll be reconciled at month end."*
+- **Neither** → **`liangzai_mark_document`** with `not_an_invoice` and a reason, then report
+  the filename and sender. Write nothing to a money table.
+- **A money document you cannot read** → **`liangzai_mark_document`** with `failed` and the
+  reason.
+
+### 5. Extract — this is your job, not a tool's
+
+Read each downloaded file. You render PDFs and photos natively. Extract
 to exactly this shape, one object per invoice:
 
 ```json
@@ -133,7 +199,7 @@ Rules that matter more than speed:
   stand in for one.** That was the old rule and it is what misfiled the statements. If it
   is not an invoice, it does not belong in this payload.
 
-### 5. Append
+### 6. Append
 
 > Call **`liangzai_append_invoice_log`** with `{ invoices: [...] }` (add `dry_run:
 > true` first to preview).
@@ -170,7 +236,7 @@ Why the machine registers but never merges: **creating** a supplier is safe (the
 is a duplicate you merge later), while **merging** two is not. That asymmetry is the whole
 design.
 
-### 6. Capture sales too
+### 7. Capture sales too
 
 The weekly run must also record the week's Loyverse sales — see `/cost-optimizer`.
 Loyverse refuses receipts older than 31 days, so a skipped run over a month loses that
@@ -194,17 +260,25 @@ document row and overwrites it, however differently you read it.
 So the rule survives, but for a different reason:
 
 1. **Never re-extract a document that is already recorded.** Call
-   **`liangzai_pending_documents`** first and skip everything in `processed`. Not because a
-   re-read would double the money — it can't — but because it costs tokens and minutes to
-   arrive back where you already were, and a hurried second reading **overwrites a careful
-   first one**. Replacement cuts both ways.
+   **`liangzai_pending_documents`** first, work only `pending`, and skip everything in
+   `processed`. Not because a re-read would double the money — it can't — but because it
+   costs tokens and minutes to arrive back where you already were, and a hurried second
+   reading **overwrites a careful first one**. Replacement cuts both ways.
+
+   The queue now guards one thing your own care cannot. A single statement, forwarded and
+   replied to, arrives as several Gmail attachments with several different
+   `attachment_id`s — genuinely different attachments, and not five documents. The poller
+   recognises them by their bytes and queues one. Without that, five queue rows would mean
+   five sets of statement rows and a reconciliation run against five times the supplier's
+   figures — and a doubled statement total does not look like a bug, it looks like a
+   supplier dispute.
 2. **Extract deterministically anyway** — one row per printed line, in document order. It
    is what makes two readings of the same invoice agree, and what makes the owner's
    line-by-line reconciliation legible when he opens it.
 
 A genuine correction is now a supported operation rather than a hazard: re-send the
 document and the record is replaced. That is the safety net. It is not permission to skip
-step 1.
+rule 1 above.
 
 ---
 
@@ -214,27 +288,34 @@ step 1.
 the last weekly run must be logged here, or the statement bills something we never logged
 and the variance it produces is not real.
 
-### 1. Download
+### 1. Make the queue current
 
-```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/capture/download_invoices.py --days 14
-```
+> Call **`liangzai_poll_mailbox`** with `{ days: 14 }`.
 
 Fourteen days, not seven: wide enough to catch statements sent on the 1st–6th **and** any
-invoice that landed after the last weekly run.
+invoice that landed after the last weekly run. Read the same two fields as the weekly run —
+`capped` (run it again) and `duplicate_content` (normal).
 
-### 2. Skip what is already recorded, then classify
+### 2. Take the worklist, fetch, then classify
 
-> Call **`liangzai_pending_documents`**.
+> Call **`liangzai_pending_documents`**, then **`liangzai_document_content`** per pending
+> entry and `curl` each signed URL to a file, exactly as the weekly capture does (capture
+> steps 2–3).
 
 Skip every attachment named in `processed` — it covers invoices and statements alike, so
-one call answers for both. Then classify what remains with the rule at the top:
+one call answers for both. Then classify what you downloaded with the rule at the top:
 
-- **Statements** → extract and record them (below).
+- **Statements** → extract and record them (below). Most of `pending` will be these: the
+  weekly runs deliberately left them here.
 - **Invoices** → extract and append with **`liangzai_append_invoice_log`**, exactly as the
-  weekly capture does. Most will already be logged and skipped; the ones that aren't are the
-  stragglers that would otherwise reconcile against nothing.
-- **Neither** → write nothing, report it.
+  weekly capture does. These are the stragglers that would otherwise reconcile against
+  nothing.
+- **Neither** → **`liangzai_mark_document`** (`not_an_invoice`, with a reason), and report it.
+- **Unreadable money document** → **`liangzai_mark_document`** (`failed`, with the reason).
+
+**Nothing may be left `pending` at the end of the close.** Unlike the weekly run, this is
+the run where the queue must come out empty — the month close gates on it, and it gates
+across all six stalls at once.
 
 ### 3. Extract the statements
 
@@ -329,10 +410,14 @@ the owner can, after paying his bank.
 ## Reporting back
 
 Counts, not row dumps: how many invoices logged, how many **statements deferred to month
-end**, how many attachments you **could not classify** (by filename and sender — they were
-written nowhere), how many need review and why, how many suppliers matched, the net
-variance, anything still awaiting an SOA. Name the flagged supplier and outlet. If nothing
-needs him, say so plainly.
+end**, how many documents you **dismissed as not-an-invoice** (by filename and sender — they
+were written to no money table), how many need review and why, how many suppliers matched,
+the net variance, anything still awaiting an SOA. Name the flagged supplier and outlet. If
+nothing needs him, say so plainly.
+
+Say what the queue looks like when you finish: how many `pending` are left and why (weekly:
+statements, deliberately; monthly: nothing should be). A number left behind with no
+explanation is the one that turns into a blocked month close.
 
 ### When this ran on a schedule, email him — always
 
@@ -344,9 +429,10 @@ If the run was started by a Cowork scheduled task rather than by the owner sitti
 > you deferred** — *"2 statements arrived; they'll be reconciled at month end"* — so he
 > knows they were seen and not lost.
 >
-> `needs_owner` carries anything needing a human: unmatched outlets, and **every attachment
-> you could not classify**, by filename and sender. Those were written nowhere, so this
-> report is their only trace — if you omit them, they are lost.
+> `needs_owner` carries anything needing a human: unmatched outlets, and **every document
+> you dismissed or could not read**, by filename and sender. The dismissal reason is on the
+> row, but he does not have a screen to read it on yet — this report is the only place he
+> sees it.
 >
 > Set `status: "attention"` if `needs_owner` is non-empty, `"ok"` if not, `"failed"` if the
 > run broke.

@@ -15,9 +15,10 @@ while both manifests still said 0.4.0) and the skills read the manifest, not ver
   .claude-plugin/marketplace.json              "version" in BOTH metadata and plugins[0]
 Confirm nothing sensitive is staged — this repository is PUBLIC:
   git ls-files | grep -E '^\.claude/|^cache/|^fixtures/|^\.venv|_audit|bowl_checklist\.(json|md)'
-  must return nothing. `.claude/settings.local.json` holds the Loyverse token and the
-  Google refresh tokens; `cache/` and `fixtures/` hold supplier invoices; the bowl
-  checklist holds the owner's real per-dish sales volumes. None of it may be published.
+  must return nothing. `.claude/settings.local.json` holds the Google OAuth client id and
+  secret; `cache/` and `fixtures/` hold supplier invoices — `cache/` is where the capture
+  run downloads them from the gateway's signed URLs; the bowl checklist holds the owner's
+  real per-dish sales volumes. None of it may be published.
 Use git add . to stage all changes
 Commit with descriptive message that starts with the version number
 Git push origin

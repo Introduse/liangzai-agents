@@ -18,8 +18,10 @@ look at. Everything here exists to make sure it is *right*, or absent.
 
 Pass the plugin's `gateway_api_key` on every `liangzai_*` call. **That is the only
 argument you supply** — the gateway holds its own Google, mailbox and Loyverse credentials
-server-side. If a tool's schema still shows `spreadsheet_id` or `sheets_refresh_token`, the
-connector has cached an old tool list: reconnect it rather than filling the fields in.
+server-side. If a `liangzai_*` call comes back `unknown tool`, or a tool's schema still
+shows `spreadsheet_id` or `sheets_refresh_token`, the connector has cached an old tool
+list — **reconnect it**, and never report it as a missing gateway feature. `/plugin-update`
+checks exactly this.
 
 ## It is not "cost per bowl", and must never be labelled as one
 

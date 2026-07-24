@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.14.1';
+const DEFAULT_VERSION = 'v0.15.0';
 const DEFAULT_DATE = 'Jul 24, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,23 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.15.0',
+    date: 'Jul 24, 2026',
+    changes: [
+      'THE PLUGIN HALF OF GATEWAY PHASE 2. The gateway now polls the supplier mailbox server-side and exposes a work queue, so the flow inverts: it was download locally → ask what is already recorded → extract, and it is now liangzai_poll_mailbox → liangzai_pending_documents → liangzai_document_content per document → curl the 15-minute signed URL to a file → classify → append. The PDF still lands on disk, because Claude has to read it and renders PDFs and photos natively; what changed is that the gateway fetched it. Classification, the extraction payload, the dedupe doctrine and "the agent never approves and never pays" are all unchanged.',
+      'THREE new tools in the identity table and in the tests\' GATEWAY_TOOLS: liangzai_poll_mailbox, liangzai_document_content, liangzai_mark_document. That set is the stale-connector oracle plugin-update check #2 compares against, and it was exactly three short.',
+      'THREE scripts deleted, not two. download_invoices.py is the obvious one and gmail.py is its only dependency — but gmail.py was google_auth.py\'s only importer, so retiring the caller orphaned a module no skill has ever named. common/env.py and oauth/google_oauth.py stay: setup still runs the OAuth exchange locally.',
+      'google_oauth.py stops saving the refresh token and PRINTS it instead. It was writing GMAIL_REFRESH_TOKEN to `parents[2]/.claude/settings.local.json` — the PLUGIN directory — while env.py reads the WORKSPACE file it finds by walking up from cwd. Nothing ever read what it wrote. On an install that had one, plugin-update check #9 would report GMAIL_REFRESH_TOKEN missing, send the owner through 3g–3h to "fill" it, and report it missing again: the same detect → fill → re-detect loop v0.14.0\'s Step 3j was written to break, in a second place, undetected because the two halves were in different files. Printing removes the loop structurally rather than correcting the path — after this release nothing local reads the token at all, so there is nothing to keep in sync.',
+      'plugin-update check #9 inverted rather than deleted. It used to hunt five values in .claude/settings.local.json because "download_invoices.py authenticates with them, and it still runs here". It now asks whether the mailbox queue is being FILLED — liangzai_pending_documents\' last_poll, not its pending — because that is the thing that can actually be missing after this upgrade. The notes say plainly that a GMAIL_REFRESH_TOKEN or SUPPLIER_MAILBOX still sitting in that file has no reader: leave it or delete it, never report it as a gap.',
+      'liangzai-setup Step 3f now writes exactly three values (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OAUTH_ACCOUNT) — the only ones any shipped script reads — and says so in those words. Step 8\'s smoke test becomes liangzai_poll_mailbox {dry_run: true}, which is a better validation than the download it replaces: it is the gateway using the credentials 3j just stored, against the real mailbox, writing nothing.',
+      'THE ONE INTERACTION NEITHER SIDE\'S PLAN SPOTTED. A document left `pending` blocks the month close on all six stalls, so every non-invoice must be closed with liangzai_mark_document — but the weekly run deliberately LEAVES statements pending so the monthly close finds them. Told only the first half, an agent tidies the statements away and the month reconciles against nothing. Both the skill and the agent identity now state the exception next to the rule, and a test asserts it.',
+      'Re-added the filename sanitising that died with download_invoices.py. The skill tells Claude to build a safe local name rather than paste the supplier\'s: `filename` is whatever they typed, and a slash in it makes curl write to a directory that does not exist. safe_name() had done this since the first version and the new curl step quietly dropped it.',
+      'An .xlsx or .docx invoice is a named case now, not a gap. The gateway deliberately does not filter those out — a supplier who changes how they bill must reach a human rather than vanish, which is what download_invoices.py\'s `readable` flag was for — so the skill routes them to mark_document as `failed`, naming the supplier and the format so the owner can ask for a PDF.',
+      'Four new tests, each mutation-checked against the defect it targets. Scripts: retired scripts are gone, nothing names one, and every shipped module is REACHABLE from an entry point a skill actually invokes — reachability rather than "is it imported", because the weaker question is exactly what would have missed google_auth.py while gmail.py still imported it. LocalCredentials: every env var the prose tells the owner to keep in settings.local.json is one some script calls read_env() for — scanned per paragraph, since the instruction it polices splits the filename and the names across a line break. DocumentDisposal: every "Neither" routing bullet names mark_document, and a statement bullet says not to.',
+      'Carried in from the gateway\'s spec: the poller collapses thread duplicates by content hash (one statement forwarded five times is five attachments and one document — five queue rows would have meant a reconciliation against five times the supplier\'s figures), `capped: true` means the poll stopped early and must be re-run, and last_poll is what tells a quiet week apart from a poller that died. Also: docs/*.md joined the consistency suite\'s PROSE set, where the last Sheet-era vocabulary was still hiding.',
+    ],
+  },
   {
     version: 'v0.14.1',
     date: 'Jul 24, 2026',
@@ -167,13 +184,6 @@ export const VERSION_HISTORY: Array<{ version: string; date: string; changes: st
     changes: [
       'Setup fix (found during a real run): Step 3 never told you to register the OAuth redirect URI, so Google rejected the sign-in with redirect_uri_mismatch. Step 3 now walks the Google Cloud console end to end and calls out adding http://localhost:5179 under Authorized redirect URIs as mandatory, with a troubleshooting note.',
       'google_oauth.py now prints the required redirect URI alongside the consent link, so the fix is visible at the exact moment you would hit the error.',
-    ],
-  },
-  {
-    version: 'v0.4.1',
-    date: 'Jul 11, 2026',
-    changes: [
-      'Rewrote the README in the gateway house pattern (status line, architecture, skills table, guarantees, install, gateway link). Fixed a few over-capitalised "the owner" mid-sentence artifacts from the client-scrub pass.',
     ],
   },
 ];

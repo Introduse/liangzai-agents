@@ -85,13 +85,15 @@ Then:
 - Both read as unmatched.
 
 That looks like a supplier problem. It is ours. So reconciliation detects it and says so
-outright, in the Sheet and in the summary email:
+outright, on the reconciliation row and in the summary email:
 
 > *Acme Packaging* has invoices but no statement, and *Acme Pkg Services* has a statement but
 > no invoices. **Are these the same company?**
 
-One answer fixes it. The rows correct **in place** on the next reconciliation — invoice and
-statement rows upsert on a deterministic key, so nothing is re-entered by hand.
+One answer fixes it, and nothing is re-entered by hand. The merge moves the invoices and
+statements themselves — not just the supplier's aliases — and clears the reconciliation it
+invalidated so the next run rebuilds the month. That run is not optional: until it happens,
+the month still shows the split.
 
 The detector deliberately errs toward suggesting. A false suggestion costs a glance. A
 missed one costs a month of reconciliation that quietly does not add up.

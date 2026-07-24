@@ -11,16 +11,19 @@ all live server-side in Supabase Vault. This plugin sends exactly one thing: the
 key. It used to send seven credentials on every call, because the gateway had nowhere to put
 them; it does now — and `/liangzai-setup` is what puts them there.
 
-The Google values are *also* kept locally, in `.claude/settings.local.json`, because
-`download_invoices.py` still runs on the owner's machine and has to authenticate on its
-own. That is a second copy for a second job — not the copy the gateway reads.
+The OAuth client id, secret and mailbox address are also kept locally, in
+`.claude/settings.local.json` — not because anything here uses them at run time, but
+because minting a Google refresh token needs a browser and a human clicking Allow, and
+that cannot happen server-side. The token itself is never written to disk: the script
+prints it and setup puts it in the Vault.
 
 Built by [Five Bucks Ventures](https://fivebucksventures.com).
 
-> **Status (v0.14.0):** Plugin marketplace with four skills and the agent. Client-neutral.
+> **Status (v0.15.0):** Plugin marketplace with four skills and the agent. Client-neutral.
 > Requires the gateway deployed and registered as a Cowork custom connector (set the URL in
 > `plugins/liangzai/.mcp.json`), and `/liangzai-setup` run through to the end — the gateway
-> cannot send an email until Step 3j has put the credentials in its Vault.
+> can neither read the supplier mailbox nor send an email until Step 3j has put the
+> credentials in its Vault.
 
 **Nothing is ever paid automatically.** The agents log, reconcile, and calculate — there is
 no `Approved` and no `Paid` status the agent can set. Every flagged item and every payment
@@ -32,31 +35,37 @@ goes through the owner.
 
 ```
 liangzai-agents (THIS REPO — the plugin)         liangzai-gateway (remote MCP, Vercel)
-  skills drive the workflow; Claude       ──MCP──▶  liangzai_* tools:
-  extracts invoice PDFs and calls                     reconcile · capture_sales ·
-  the gateway                                         append_invoice_log · compute_cost ·
-  download_invoices.py runs LOCALLY                   send_summary · pending_documents · …
-  (the Gmail connector can't fetch                    → Supabase Postgres (source of truth)
-   attachment bytes)
+  skills drive the workflow; Claude       ──MCP──▶  poll_mailbox · pending_documents ·
+  drains the ingestion queue, reads                 document_content · mark_document ·
+  each invoice PDF and calls the                    append_invoice_log · reconcile ·
+  gateway                                           capture_sales · compute_cost · …
+                                                      │
+  google_oauth.py runs LOCALLY, once                  ├──▶ Supabase Postgres + a private
+  (Google will only hand a refresh                    │    Storage bucket (source of truth)
+   token to a browser)                                └──▶ the supplier mailbox, polled
+                                                           daily on cron and on demand
 ```
 
-Only two scripts run locally, on the owner's machine: `download_invoices.py` (Claude reads
-the downloaded PDFs to extract line items) and `google_oauth.py` (one-time consent to mint
-the Google refresh token). Everything else — reconciliation, cost math, every database
-write, all Loyverse and Gmail calls — happens in the gateway.
+**The gateway fetches the mail.** It polls the supplier mailbox server-side, stores each
+attachment in a private bucket, and hands the skill a 15-minute signed URL per document.
+The PDF still lands on the owner's machine — Claude has to read it to extract line items —
+but nothing here talks to Gmail. One script runs locally, once: `google_oauth.py`, the
+one-time consent that mints the refresh token the gateway then owns. Everything else —
+reconciliation, cost math, every database write, all Loyverse and Gmail calls — is the
+gateway's.
 
-Those calls carry no credentials. If a tool's schema still shows `spreadsheet_id` or
-`sheets_refresh_token`, the connector has cached an old tool list: reconnect it rather than
-filling the fields in.
+Those calls carry no credentials. If a `liangzai_*` call comes back `unknown tool`, or a
+tool's schema still shows `spreadsheet_id` or `sheets_refresh_token`, the connector has
+cached an old tool list — reconnect it rather than filling fields in or filing a gateway bug.
 
 ## The skills
 
 | Skill | Does |
 |---|---|
 | `liangzai-setup` | First-run onboarding: connect the gateway, mint the Google token and store it in the gateway's Vault, confirm the Loyverse mapping and the bowl definition, and embed the agent into the workspace `CLAUDE.md` |
-| `supplier-invoice-manager` | **Weekly** — download + extract invoices → `liangzai_append_invoice_log`. **Monthly** — extract statements, `liangzai_run_reconciliation`, `liangzai_send_summary` |
+| `supplier-invoice-manager` | **Weekly** — `liangzai_poll_mailbox` → drain `liangzai_pending_documents` → extract invoices → `liangzai_append_invoice_log`; anything that is not a money document is closed with `liangzai_mark_document`. **Monthly** — extract statements, `liangzai_run_reconciliation`, `liangzai_send_summary` |
 | `cost-optimizer` | **Weekly** — `liangzai_capture_sales`. **Monthly** — `liangzai_compute_cost_per_bowl`. **Ad hoc** — `liangzai_daily_sales` for live per-outlet sales in SGD |
-| `plugin-update` | Idempotent catch-up after an upgrade — detects gaps (connector, Vault credentials, local download credentials, bowl definition, scheduled tasks, CLAUDE.md embed) and fills only what's missing |
+| `plugin-update` | Idempotent catch-up after an upgrade — detects gaps (connector, Vault credentials, whether the mailbox poller is running, bowl definition, scheduled tasks, CLAUDE.md embed) and fills only what's missing |
 
 `agents/liangzai.md` defines the agent identity; `liangzai-setup` embeds it into the
 workspace `CLAUDE.md` so every session — including scheduled runs — auto-loads it.
@@ -83,7 +92,9 @@ plugins/liangzai/
   ├── .mcp.json                     # the gateway connector URL
   ├── agents/liangzai.md            # agent identity (embedded into CLAUDE.md by setup)
   ├── skills/{liangzai-setup, supplier-invoice-manager, cost-optimizer, plugin-update}/
-  └── scripts/                      # local-only: download_invoices.py, google_oauth.py
+  └── scripts/
+      ├── oauth/google_oauth.py     # the only local entry point: one-time Google consent
+      └── common/env.py             # reads .claude/settings.local.json, for the above
 ```
 
 ## Install
