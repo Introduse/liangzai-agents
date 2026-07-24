@@ -217,6 +217,17 @@ class Versions(unittest.TestCase):
         first = re.search(r"version: 'v([\d.]+)'", version_ts).group(1)
         self.assertEqual(default, first, "VERSION_HISTORY[0] is not the current version")
 
+    def test_history_is_capped_at_fifteen(self):
+        """version.ts's own rule, which it had drifted to 19 entries past."""
+        version_ts = read(ROOT / "versions" / "version.ts")
+        entries = re.findall(r"^    version: 'v[\d.]+',$", version_ts, re.M)
+        self.assertLessEqual(
+            len(entries),
+            15,
+            f"\nVERSION_HISTORY holds {len(entries)} entries; the cap is 15. Drop the "
+            "oldest — the full history is in the git log and the GitHub releases.",
+        )
+
     def test_dates_agree(self):
         version_ts = read(ROOT / "versions" / "version.ts")
         default_date = re.search(r"DEFAULT_DATE = '([^']+)'", version_ts).group(1)
@@ -252,9 +263,10 @@ class CrossReferences(unittest.TestCase):
         text = read(PLUGIN / "skills" / "plugin-update" / "SKILL.md")
         rows = {m.group(1) for m in re.finditer(r"^\| (\d+) \|", text, re.M)}
         self.assertTrue(rows, "no checklist rows found — did the table format change?")
+        # Table lines are checked too: both the checklist and the Step 3 fill table
+        # cross-reference rows by number, and a row label ("| 4 |") cannot be
+        # mistaken for a reference ("#4"), so there is nothing to exclude.
         for lineno, line in enumerate(text.splitlines(), 1):
-            if line.startswith("|"):
-                continue  # the table itself
             for ref in re.findall(r"#(\d+)", line):
                 self.assertIn(
                     ref,

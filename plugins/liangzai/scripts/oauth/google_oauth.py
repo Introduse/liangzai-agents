@@ -15,10 +15,10 @@ gone — the gateway keeps its data in Postgres — so the scope is no longer
 requested and SHEETS_REFRESH_TOKEN is no longer written. A token minted before
 this change still works: the extra scope is unused, not harmful.
 
-The token lands in two places, for two different consumers: `.claude/settings.
-local.json` for `download_invoices.py`, which runs here, and the gateway's Vault
-for the summary mailer, which does not. `/liangzai-setup` Step 3j does the
-second half — this script only does the first.
+The token lands in two places, for two different consumers: this machine's
+settings file, for `download_invoices.py`, which runs here; and the gateway's
+Vault, for the summary mailer, which does not. `/liangzai-setup` Step 3j does
+the second half — this script only does the first.
 
 Scope classification, since it decides everything below: gmail.readonly is
 RESTRICTED (external apps need an annual third-party security assessment);

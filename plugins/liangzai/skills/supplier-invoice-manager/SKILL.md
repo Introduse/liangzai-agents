@@ -9,7 +9,7 @@ description: >-
   logged. Use whenever the user says capture invoices, log invoices, reconcile, check the
   statement, month-end close, or asks why a supplier total does not match.
 area: Invoicing
-use_for: "Weekly: classify mailbox attachments, record INVOICES by outlet, defer statements. Monthly: log the statements + any straggler invoice, reconcile, flag variance, email the owner. Every append is deduped."
+use_for: "Weekly: classify mailbox attachments, record INVOICES by outlet, defer statements. Monthly: log the statements + any straggler invoice, reconcile, flag variance, email the owner. Re-sending a document replaces it, so a re-run is safe."
 ---
 
 # Supplier Invoice Manager
@@ -18,8 +18,9 @@ Two modes on two clocks. **Capture** weekly: classify the mailbox, log the invoi
 the statements. **Reconcile** monthly: log the statements *and* any invoice the weekly run
 missed, then match them line by line.
 
-Both modes write. Neither may write the same thing twice — see **The dedupe**, and do not
-skip it.
+Both modes write, and both are safe to re-run: re-sending a document replaces what was
+recorded for it. That is not a reason to re-read one — see **The dedupe**, and do not skip
+it.
 
 **The contract, which nothing may relax:** the agent logs, reconciles, and flags. It
 never approves and it never pays. There is no `Approved` and no `Paid` status anywhere

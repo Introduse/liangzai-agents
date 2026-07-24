@@ -11,15 +11,16 @@ all live server-side in Supabase Vault. This plugin sends exactly one thing: the
 key. It used to send seven credentials on every call, because the gateway had nowhere to put
 them; it does now — and `/liangzai-setup` is what puts them there.
 
-One credential is also kept locally, in `.claude/settings.local.json`: the Google token that
-`download_invoices.py` authenticates with, because that script still runs on the owner's
-machine. It is a second copy for a second job, not the one the gateway reads.
+The Google values are *also* kept locally, in `.claude/settings.local.json`, because
+`download_invoices.py` still runs on the owner's machine and has to authenticate on its
+own. That is a second copy for a second job — not the copy the gateway reads.
 
 Built by [Five Bucks Ventures](https://fivebucksventures.com).
 
-> **Status (v0.4.0):** Plugin marketplace with four skills and the agent. Client-neutral.
+> **Status (v0.14.0):** Plugin marketplace with four skills and the agent. Client-neutral.
 > Requires the gateway deployed and registered as a Cowork custom connector (set the URL in
-> `plugins/liangzai/.mcp.json`).
+> `plugins/liangzai/.mcp.json`), and `/liangzai-setup` run through to the end — the gateway
+> cannot send an email until Step 3j has put the credentials in its Vault.
 
 **Nothing is ever paid automatically.** The agents log, reconcile, and calculate — there is
 no `Approved` and no `Paid` status the agent can set. Every flagged item and every payment

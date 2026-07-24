@@ -70,8 +70,8 @@ Downloading attachments runs **on the owner's machine**, via
 `${CLAUDE_PLUGIN_ROOT}/scripts/capture/download_invoices.py` — the Gmail MCP connector cannot fetch
 attachment bytes, and you (Claude) must read the PDFs to extract line items.
 
-The flow is: **skip what is already logged → download → CLASSIFY each attachment → extract
-→ append.** Invoices go to `liangzai_append_invoice_log`, statements to
+The flow is: **download → skip what is already recorded → CLASSIFY each attachment →
+extract → append.** Invoices go to `liangzai_append_invoice_log`, statements to
 `liangzai_append_soa_entries`, and anything that is neither goes **nowhere** — it is
 reported, not written.
 
