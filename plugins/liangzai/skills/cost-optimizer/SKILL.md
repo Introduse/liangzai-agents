@@ -2,13 +2,13 @@
 name: cost-optimizer
 description: >-
   Work out Liang Zai's real cost per bowl, per outlet, per month. Run weekly to record
-  that week's Loyverse sales; run monthly to tally those sales
-  into bowls, pair each outlet's bowls with its reconciled supplier cost, and write
+  that week's Loyverse sales — revenue and item quantities both; run monthly to tally those
+  sales into bowls, pair each outlet's bowls with its reconciled supplier cost, and write
   cost-per-bowl. Use whenever the user asks about cost per bowl, margin, bowls sold,
   Loyverse sales, how much an outlet sold today or this week, or which outlet is getting
   more expensive.
 area: Cost
-use_for: "Weekly: record Loyverse sales per item per outlet per day. Monthly: tally bowls, pair with reconciled cost, write cost/bowl. Ad hoc: live per-outlet sales in SGD for today or a trailing window."
+use_for: "Weekly: record Loyverse sales per outlet per day — revenue and per-item quantities. Monthly: tally bowls, pair with reconciled cost, write cost/bowl. Ad hoc: live per-outlet sales in SGD for today or a trailing window."
 ---
 
 # Cost Optimizer
@@ -16,16 +16,17 @@ use_for: "Weekly: record Loyverse sales per item per outlet per day. Monthly: ta
 Cost per bowl is the number the owner does not have today and the one he will actually
 look at. Everything here exists to make sure it is *right*, or absent.
 
-Pass the plugin's `gateway_api_key`, plus the Google credentials from
-`.claude/settings.local.json`, on every `liangzai_*` call — see `agents/liangzai.md` for
-the exact argument names.
+Pass the plugin's `gateway_api_key` on every `liangzai_*` call. **That is the only
+argument you supply** — the gateway holds its own Google, mailbox and Loyverse credentials
+server-side. If a tool's schema still shows `spreadsheet_id` or `sheets_refresh_token`, the
+connector has cached an old tool list: reconnect it rather than filling the fields in.
 
 ## It is not "cost per bowl", and must never be labelled as one
 
 The figure covers **only the ~70% of suppliers in the automated flow.** The small
 suppliers the owner keeps manual are excluded — by his own choice. It contains no rent, no
 labour, no utilities. So it is **supplier cost per bowl, for tracked suppliers** —
-`每碗供应商成本(已记录)`. The Sheet, the email, and every report say so.
+`每碗供应商成本(已记录)`. The stored row, the email, and every report say so.
 
 **Never gross it up.** The 30% is a share of *suppliers*, not of *spend*, and they are
 the small ones. Dividing by 0.7 would invent an authoritative-looking number that is
@@ -41,12 +42,13 @@ The owner's Loyverse plan returns **`HTTP 402` for any receipt older than 31 day
 this agent **never looks back**: the weekly run records sales as they happen; the
 monthly run only tallies what is already stored. Three consequences, all load-bearing:
 
-1. **`sales_daily` stores net quantity per item — not a bowl count.** Loyverse can never
-   be re-read past 30 days, so a stored bowl count would permanently freeze today's bowl
-   definition. Item quantities keep the definition a revisable *view* over durable data.
+1. **`daily_item_sales` stores net quantity per item — not a bowl count.** Loyverse can
+   never be re-read past 30 days, so a stored bowl count would permanently freeze today's
+   bowl definition. Item quantities keep the definition a revisable *view* over durable data.
 2. **A weekly run missed for over 30 days loses that period permanently.** Each run
    backfills from the last recorded day and says so loudly when it can't reach back far
-   enough.
+   enough. It is not only bowls that are lost — `daily_sales` is the only record of what
+   each stall took that day, and nothing else in the system can reconstruct it.
 3. **June 2026 cost-per-bowl does not exist** and never will. Do not fabricate it.
 
 ## Mode: capture-sales (weekly, alongside the invoice capture)
@@ -54,9 +56,14 @@ monthly run only tallies what is already stored. Three consequences, all load-be
 > Call **`liangzai_capture_sales`** (omit `days` to resume from the last recorded day;
 > add `dry_run: true` to preview).
 
-The gateway buckets by **Singapore date**, not UTC, and is idempotent on
-`{outlet}|{date}|{item_id}|{variant}`. If it warns that days are unreachable, tell
-the owner immediately — that data is gone.
+It records **two** things, and both matter: per-item net quantities (`daily_item_sales`,
+which the bowl count is derived from) and **per-stall daily revenue** (`daily_sales`). The
+revenue side is newer and it is not a by-product — it is the only record of what each stall
+took, per day, anywhere in the system.
+
+The gateway buckets by **Singapore date**, not UTC, and re-recording a day it already has
+replaces it rather than adding to it. If it warns that days are unreachable, tell the owner
+immediately — that data is gone.
 
 ## What counts as a bowl
 
@@ -70,7 +77,7 @@ and don't re-litigate the classification with him.
 
 This choice silently sets the headline number, which is why
 `liangzai_compute_cost_per_bowl` refuses to run until `confirmed_by_owner` is true. Don't
-work around that. Because `sales_daily` is item-level, changing the definition later
+work around that. Because `daily_item_sales` is item-level, changing the definition later
 re-derives history correctly instead of corrupting it.
 
 ## Mode: monthly
@@ -78,7 +85,7 @@ re-derives history correctly instead of corrupting it.
 Run after reconciliation, so the cost basis is settled.
 
 **This mode is step 2 of the monthly close — it is never scheduled on its own.**
-`liangzai_compute_cost_per_bowl` reads the `reconciliation` tab, so a separate schedule
+`liangzai_compute_cost_per_bowl` reads the reconciled totals, so a separate schedule
 could fire it before reconciliation had run and publish a cost per bowl against a stale or
 empty basis. It looks entirely plausible when that happens, which is what makes it
 dangerous. One task, in order: reconcile, then this. See `/liangzai-setup` Step 10.
@@ -86,8 +93,8 @@ dangerous. One task, in order: reconcile, then this. See `/liangzai-setup` Step 
 > Call **`liangzai_compute_cost_per_bowl`** with `{ month: "2026-07" }` (add `dry_run:
 > true` to preview).
 
-This reads `sales_daily` and `reconciliation`. **It does not call Loyverse.** Two honesty
-rules it enforces:
+This reads the recorded item quantities and the reconciled costs. **It does not call
+Loyverse.** Two honesty rules it enforces:
 
 - **`days_covered`** is written on every row. Eighteen days of sales divided into a full
   month of costs understates cost-per-bowl by a third and looks entirely plausible. If
@@ -125,8 +132,17 @@ question he asked.
 > Call **`liangzai_daily_sales`** (`days: 1` = today only, the default; `days: 7` = the
 > trailing week; max 30, the Loyverse wall).
 
-It reads Loyverse **live and writes nothing** — it does not touch `sales_daily`, and it is
-not the weekly capture. Three things to hold onto when you report it:
+It reads Loyverse **live and writes nothing** — it is not the weekly capture and it stores
+nothing, so an answer it gives is not a record anybody can read back later.
+
+Both this and `liangzai_capture_sales` now deal in per-stall revenue, which makes them easy
+to confuse. The difference is what they are for: **this one answers a question he asked
+right now**, from Loyverse, including a part-finished today. The capture **writes the day
+down** so it still exists after Loyverse's 30-day window closes. Never substitute one for
+the other — answering "how much did we take today" does not record the day, and running a
+capture is not a way to answer him.
+
+Three things to hold onto when you report it:
 
 - **It is money, not bowls.** `sales` is net revenue in SGD (refunds subtracted), summed per
   receipt — the figure the owner cross-checks against each till. It says nothing about cost or

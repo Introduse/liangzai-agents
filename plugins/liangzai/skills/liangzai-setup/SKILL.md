@@ -2,13 +2,13 @@
 name: liangzai-setup
 description: >-
   Run once, inside the owner's Claude Cowork project, to wire up the Liang Zai agents:
-  connect the liangzai gateway, register the Google refresh token locally for invoice
-  downloads, confirm the Loyverse mapping, record what counts as a
+  connect the liangzai gateway, mint the Google refresh token, hand the credentials to
+  the gateway's Vault, confirm the Loyverse mapping, record what counts as a
   bowl, and embed the agent into the workspace CLAUDE.md. Use when the user says "set
   up", "get started", "onboard", "first run", or when any Liang Zai skill reports a
-  missing connector, key, or bowl definition.
+  missing connector, key, credential, or bowl definition.
 area: Setup
-use_for: "First-run onboarding: gateway connector + API key, local Google OAuth, Sheet tabs, outlet map, bowl definition, workspace CLAUDE.md, scheduled tasks."
+use_for: "First-run onboarding: gateway connector + API key, Google OAuth, storing the credentials in the gateway's Vault, the Loyverse check, bowl definition, workspace CLAUDE.md, scheduled tasks."
 ---
 
 # Liang Zai — First-Run Setup
@@ -17,11 +17,17 @@ The owner is a hawker-chain operator, not an engineer. **Explain what each step 
 before asking, do one step at a time, and confirm before moving on. Never show a stack
 trace** — say plainly what broke and what you need.
 
-Almost everything runs through the **gateway** (a remote MCP server Five Bucks deploys).
-It holds only the **Loyverse** token and the spreadsheet id; the **Google credentials are
-this machine's**, kept in `.claude/settings.local.json` and sent with every call. Setup
-connects the gateway, mints those Google credentials, and embeds the agent so every future
-session loads it. It is safe to re-run — every step checks whether it is already done.
+Almost everything runs through the **gateway** (a remote MCP server Five Bucks deploys),
+and **the gateway holds every credential** — in its own Vault, server-side. No `liangzai_*`
+call carries one; the only argument the agent ever sends is `gateway_api_key`.
+
+Setup's job with credentials is therefore to *put them there* (Step 3): mint the Google
+token on this machine, then hand it to the gateway. One copy stays local as well, because
+the invoice download still runs here and needs it — but the local copy is for that script
+alone, not for the gateway.
+
+Setup also connects the gateway and embeds the agent so every future session loads it. It
+is safe to re-run — every step checks whether it is already done.
 
 ## Arguments
 
@@ -38,8 +44,8 @@ so they can pause and resume anytime. The only exception is an explicit "skip".
 
 ## Step 1 — Work in a Project
 
-All local files (the invoice cache, `.claude/settings.local.json`) live inside a Cowork
-project. Setup cannot run without one.
+The local files the invoice download needs (the invoice cache,
+`.claude/settings.local.json`) live inside a Cowork project. Setup cannot run without one.
 
 > In Cowork, look below the chat input for **Projects** → **Create a new Project** →
 > **Use an existing folder**, pick the `liangzai-agents` folder, name it "Liang Zai".
@@ -71,11 +77,14 @@ when the key is valid. If not, the key or URL is wrong; stop and fix.
 
 ## Step 3 — Google access
 
-This machine is where the Google credentials live. They do two jobs. Locally, they let
-`download_invoices.py` fetch invoice attachments — the Gmail connector can't fetch
-attachment bytes, so that part has to run here. Remotely, they are what every `liangzai_*`
-call sends to the gateway, which holds no Google credentials of its own (see
-`agents/liangzai.md`). One consent, minted here, covers both.
+One Google consent, minted on this machine, serves two consumers. Locally,
+`download_invoices.py` uses it to fetch invoice attachments — the Gmail connector can't
+fetch attachment bytes, so that part has to run here. Server-side, the gateway uses it to
+send the reconciliation summary and the run reports.
+
+So the token is minted here (3g–3h), saved here for the download, **and stored in the
+gateway's Vault (3j)**. Two copies of one credential, for two different jobs. The gateway
+never asks this machine for it at call time.
 
 The OAuth client must be **Internal** to the Google Workspace — `gmail.readonly` is a
 restricted scope, and an External client left in Testing gets refresh tokens that
@@ -94,17 +103,20 @@ several near-identical menus and the wrong one is a dead end.
 > When it finishes, make sure that new project is **selected in the top bar** — everything
 > below applies to the selected project.
 
-### 3b. Turn on the two APIs
+### 3b. Turn on the Gmail API
 
-Both are required: Gmail (to read invoice attachments and send the summary) and Sheets (to
-write the tracking sheet). If either is off, the token mints fine but every call fails
-later with `API has not been used in project … before or it is disabled`.
+Gmail is the only one needed — it reads invoice attachments and sends the summary. If it is
+off, the token mints fine but every call fails later with `API has not been used in project
+… before or it is disabled`.
 
 > Left menu → **APIs & Services → Library**.
-> 1. Search **Gmail API** → click it → **Enable**.
-> 2. Go back to Library. Search **Google Sheets API** → click it → **Enable**.
+> Search **Gmail API** → click it → **Enable**.
 
-Confirm both now show **API Enabled** before continuing.
+Confirm it shows **API Enabled** before continuing.
+
+*(Earlier versions also enabled the Google Sheets API. The tracking Sheet is gone — the
+gateway keeps its data in Postgres — so that API and its scope are no longer requested. An
+existing setup that has it enabled can leave it; it is unused, not harmful.)*
 
 ### 3c. Configure the consent screen (Google Auth Platform)
 
@@ -127,13 +139,12 @@ and it is the default one.
 
 ### 3d. Add the scopes (Data Access)
 
-> **Google Auth Platform → Data Access → Add or remove scopes.** Add these three, then
+> **Google Auth Platform → Data Access → Add or remove scopes.** Add these two, then
 > **Update** and **Save**:
 >
 > ```
 > https://www.googleapis.com/auth/gmail.readonly
 > https://www.googleapis.com/auth/gmail.send
-> https://www.googleapis.com/auth/spreadsheets
 > ```
 
 ### 3e. Create the OAuth client — and add the redirect URI
@@ -164,9 +175,9 @@ Write `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_ACCOUNT`, `SUPPLIER_MAI
 the consent below is refused under any other login, so a stray personal account can never
 quietly become the inbox the agent reads.
 
-This file is the only copy of these values anywhere. The agent reads them straight out of
-it and passes them to the gateway on every `liangzai_*` call, so if they are wrong or
-missing here, nothing works — not the local download, not the mailbox reads.
+These are what the local invoice download authenticates with, and what 3g–3h need in order
+to mint the token at all. They are copied to the gateway in 3j — this file is not what the
+gateway reads.
 
 ### 3g. Get the sign-in link and give it to him
 
@@ -199,24 +210,49 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/oauth/google_oauth.py --exchange "<the URL
 
 Quote the URL — it contains `&` and an unquoted shell will cut it in half. The script
 pulls the code out, swaps it for a refresh token, checks the account he actually signed in
-as matches `OAUTH_ACCOUNT`, and only then writes `GMAIL_REFRESH_TOKEN` +
-`SHEETS_REFRESH_TOKEN`. If the account doesn't match, it saves nothing and says so.
+as matches `OAUTH_ACCOUNT`, and only then writes `GMAIL_REFRESH_TOKEN`. If the account
+doesn't match, it saves nothing and says so.
 
 **The code is single-use and expires in minutes.** If he took a coffee break, or you run
 the exchange twice, Google answers `invalid_grant` — that isn't a misconfiguration, just
 redo 3g.
 
-### 3i. Save the recipient allowlist
+### 3i. Ask who receives the emails
 
 Ask the owner who should receive the summary and run-report emails — almost always just
-himself. Write the answer as a comma-separated list under `SUMMARY_RECIPIENTS` in
-`.claude/settings.local.json`, next to the values from 3f and the refresh tokens 3h just
-wrote.
+himself. Take the answer as a comma-separated list; 3j stores it.
 
 This is a hard guard, not a formality. Every send is checked against this list and refuses
 any address off it, and the mailbox it sends *from* is the one suppliers write *to* — so
 the list is what stands between a bug and an email landing at a supplier. Keep it to the
 owner.
+
+### 3j. Hand the credentials to the gateway
+
+Everything so far is on this machine. The gateway sends the emails, and it reads its
+credentials from its own Vault — so until this step runs, it has nothing to send with.
+
+> Call **`liangzai_store_credential`** once per value:
+>
+> | `service` | Value |
+> |---|---|
+> | `google_client_id` | `GOOGLE_CLIENT_ID` from 3f |
+> | `google_client_secret` | `GOOGLE_CLIENT_SECRET` from 3f |
+> | `gmail_refresh_token` | `GMAIL_REFRESH_TOKEN` from 3h |
+> | `supplier_mailbox` | `SUPPLIER_MAILBOX` from 3f |
+> | `summary_recipients` | the list from 3i |
+
+Then call **`liangzai_list_credentials`** and confirm all five come back, plus
+`loyverse_access_token`.
+
+**The tool is write-only — it never reads a value back**, by design, so `list_credentials`
+returns names only. That means you cannot verify a value you stored, only that *something*
+is stored under that name. Store carefully; a wrong value looks identical to a right one
+from here, and surfaces later as an email that won't send.
+
+**`loyverse_access_token` is not yours to store.** Five Bucks seeds it when the gateway is
+deployed. If it is missing from the list, say so and stop — it is not something the owner
+can supply, and every sales capture will fail without it.
 
 ### If something fails
 
@@ -224,7 +260,7 @@ owner.
 |---|---|
 | `redirect_uri_mismatch` | The redirect URI is missing or wrong. Go to **Clients → your client → Authorized redirect URIs** and add `http://localhost:5179` exactly (3e). |
 | `Access blocked: … has not completed the Google verification process` | The app is **External**. Switch **Audience** to **Internal** (3c). |
-| `API has not been used in project … or it is disabled` | Gmail API or Sheets API is off. Enable both (3b). |
+| `API has not been used in project … or it is disabled` | The Gmail API is off. Enable it (3b). |
 | `Internal` is greyed out | Not signed in with a Google Workspace account. Sign in with one. |
 | Token stops working after ~7 days | The app was left **External / Testing**. Recreate it as **Internal** (3c). |
 
@@ -237,7 +273,6 @@ tabs for a tool to create. Kept as a numbered step so the rest of this skill's n
 and every reference to it elsewhere, still lines up.*
 
 **Skip straight to Step 5.**
-
 
 ## Step 5 — Check Loyverse can see all six stalls
 
@@ -310,9 +345,9 @@ that is the only input he should ever have to give. Re-run
 Showing it is not optional, and it is why `confirmed_by_owner` exists: this single
 classification silently sets the headline number he will actually look at, and
 `liangzai_compute_cost_per_bowl` refuses to publish anything until the flag is true.
-Because `sales_daily` stores item-level quantities, changing the definition later
-re-derives history correctly instead of corrupting it — so a correction six months from
-now is cheap, and getting it wrong today is not permanent.
+Because the sales are stored item by item, changing the definition later re-derives history
+correctly instead of corrupting it — so a correction six months from now is cheap, and
+getting it wrong today is not permanent.
 
 ## Step 7 — The 30-day rule, explained once
 
@@ -327,8 +362,10 @@ now is cheap, and getting it wrong today is not permanent.
 Confirm each connection with a low-cost call before handing over:
 
 - **`liangzai_ping`** → `pong` (gateway + key).
-- **`liangzai_list_credentials`** → the services Vault holds. Anything missing here fails
-  later as a confusing runtime error rather than an obvious setup gap.
+- **`liangzai_list_credentials`** → all six: `google_client_id`, `google_client_secret`,
+  `gmail_refresh_token`, `supplier_mailbox`, `summary_recipients`, `loyverse_access_token`.
+  Anything missing here fails later as a confusing runtime error rather than an obvious
+  setup gap — re-run Step 3j for the first five, and tell Five Bucks about the last.
 - **`liangzai_loyverse_stores`** → 6 stores, empty `missing`.
 - **`liangzai_capture_sales`** with `dry_run: true` → a receipt count, no write.
 - Locally: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/capture/download_invoices.py --days 7 --dry-run`.
@@ -484,7 +521,7 @@ daily and the date check on its first line exits immediately on the other ~29 da
 not remove that guard; without it the close would run every single day.
 
 **Cost-per-bowl is step 2 of the monthly close, never its own task.**
-`liangzai_compute_cost_per_bowl` reads the `reconciliation` tab, so scheduling it
+`liangzai_compute_cost_per_bowl` reads the reconciled totals, so scheduling it
 separately risks it firing before reconciliation and publishing a cost against a stale or
 empty basis. One task, in order, is what makes that impossible.
 

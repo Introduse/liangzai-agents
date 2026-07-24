@@ -1,6 +1,6 @@
 # Liang Zai — agents
 
-A **Claude plugin** for Liang Zai Prawn Noodle's back-office: capture supplier invoices and
+A **Claude plugin** for Liang Zai Kitchen's back-office: capture supplier invoices and
 Loyverse sales, reconcile each month's Statements of Account line-by-line, and track supplier
 cost per bowl. The skills run inside the owner's own Claude Cowork project and drive the
 private [liangzai-gateway](https://github.com/Introduse/liangzai-gateway) MCP server, which
@@ -9,7 +9,11 @@ owns the database and does all the Loyverse/Gmail work.
 **The gateway holds every credential.** Google, the mailbox settings and the Loyverse token
 all live server-side in Supabase Vault. This plugin sends exactly one thing: the gateway API
 key. It used to send seven credentials on every call, because the gateway had nowhere to put
-them; it does now.
+them; it does now — and `/liangzai-setup` is what puts them there.
+
+One credential is also kept locally, in `.claude/settings.local.json`: the Google token that
+`download_invoices.py` authenticates with, because that script still runs on the owner's
+machine. It is a second copy for a second job, not the one the gateway reads.
 
 Built by [Five Bucks Ventures](https://fivebucksventures.com).
 
@@ -48,10 +52,10 @@ filling the fields in.
 
 | Skill | Does |
 |---|---|
-| `liangzai-setup` | First-run onboarding: connect the gateway, mint the Google token, confirm the Loyverse mapping and the bowl definition, and embed the agent into the workspace `CLAUDE.md` |
+| `liangzai-setup` | First-run onboarding: connect the gateway, mint the Google token and store it in the gateway's Vault, confirm the Loyverse mapping and the bowl definition, and embed the agent into the workspace `CLAUDE.md` |
 | `supplier-invoice-manager` | **Weekly** — download + extract invoices → `liangzai_append_invoice_log`. **Monthly** — extract statements, `liangzai_run_reconciliation`, `liangzai_send_summary` |
 | `cost-optimizer` | **Weekly** — `liangzai_capture_sales`. **Monthly** — `liangzai_compute_cost_per_bowl`. **Ad hoc** — `liangzai_daily_sales` for live per-outlet sales in SGD |
-| `plugin-update` | Idempotent catch-up after an upgrade — detects gaps (connector, token, tabs, outlet map, bowl definition, CLAUDE.md embed) and fills only what's missing |
+| `plugin-update` | Idempotent catch-up after an upgrade — detects gaps (connector, Vault credentials, local download credentials, bowl definition, scheduled tasks, CLAUDE.md embed) and fills only what's missing |
 
 `agents/liangzai.md` defines the agent identity; `liangzai-setup` embeds it into the
 workspace `CLAUDE.md` so every session — including scheduled runs — auto-loads it.
@@ -86,7 +90,8 @@ plugins/liangzai/
 1. Add this repo as a plugin marketplace in Claude, then install the **liangzai** plugin.
 2. Paste the gateway API key (`liangzai_live_…`) when prompted for `gateway_api_key`.
 3. Run **`/liangzai-setup`** and follow it end to end — it walks through the gateway
-   connector, Google access, the bowl definition, and the workspace `CLAUDE.md`.
+   connector, Google access, storing the credentials in the gateway's Vault, the bowl
+   definition, and the workspace `CLAUDE.md`.
 
 The 30-day Loyverse note, in one line: the free plan refuses receipts older than 31 days, so
 sales accumulate forward — the weekly run records what it can see, the monthly run tallies it,
@@ -100,4 +105,7 @@ MCP server on Vercel. Deploy it, register `https://<app>.vercel.app/api/mcp` as 
 custom connector, and put that URL in `plugins/liangzai/.mcp.json`.
 
 It holds its own credentials — Supabase Vault first, its Vercel env vars as the bootstrap
-fallback. Nothing this plugin does supplies them. See the gateway's README for the list.
+fallback. `/liangzai-setup` Step 3j writes the Google and mailer ones into the Vault via
+`liangzai_store_credential`; `LOYVERSE_ACCESS_TOKEN` is seeded at deploy time and is not
+the owner's to supply. No credential travels on a tool call. See the gateway's README for
+the full list.

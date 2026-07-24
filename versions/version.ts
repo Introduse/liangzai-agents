@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.13.0';
+const DEFAULT_VERSION = 'v0.14.0';
 const DEFAULT_DATE = 'Jul 24, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,21 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.14.0',
+    date: 'Jul 24, 2026',
+    changes: [
+      'FINISHES v0.13.0. That release moved the credentials server-side in the agent identity and the setup skill, but left supplier-invoice-manager and cost-optimizer — the two skills that actually run every week — still instructing the agent to read the Google credentials out of .claude/settings.local.json and send them on every call, pointing at a credential table the same release had deleted. Both now say what the identity says: gateway_api_key is the only argument, and a tool still advertising spreadsheet_id means a stale connector.',
+      'NEW liangzai-setup Step 3j — hand the credentials to the gateway. Nothing ever wrote to Vault. Setup minted the Google token locally and stopped, while Step 8 validated with liangzai_list_credentials and plugin-update flagged the same five names as gaps whose fill instructions only wrote locally: detect, "fill", re-check, still missing, forever. 3j stores google_client_id, google_client_secret, gmail_refresh_token, supplier_mailbox and summary_recipients with liangzai_store_credential, and names loyverse_access_token as the one nobody here can supply. The local copy stays, because download_invoices.py still runs on the owner\'s machine — two copies of one credential, for two jobs, said in those words.',
+      'liangzai_store_credential and liangzai_list_credentials added to the tool table in agents/liangzai.md. They shipped with the gateway\'s Phase 0a and were never listed, so the table that plugin-update check #2 uses as its stale-connector oracle was two tools short — and both skills were calling tools the identity said did not exist.',
+      'The dedupe doctrine is rewritten around the reason that is now true. It argued from a source_ref ending in the line INDEX, so a reordered second pass logged the same money twice with no error anywhere. Gateway Phase 1 replaced that with (invoice_id, line_no): a re-sent document REPLACES what was recorded for it, and the double-count is structurally impossible. The rule survives — skip what is already recorded — but because re-reading costs tokens and a hurried second reading OVERWRITES a careful first one. Statements got the same fix, and it matters more there: a doubled statement total does not look like a bug, it looks like a supplier dispute.',
+      'capture-sales now says it records revenue as well as quantities. Gateway Phase 1 started writing per-stall daily revenue, which nothing had ever recorded; cost-optimizer still described item quantities only, and still called the table sales_daily. Since liangzai_daily_sales also deals in revenue now, the skill spells out the difference: one answers a question he asked, the other writes the day down before Loyverse\'s 30-day window closes it.',
+      'Corrections carried in from the gateway spec: the summary email links to /reconcile?period=…, not a Sheet tab, and that screen is still being built — say so rather than talking him through a page that is not there. An unresolved outlet is a null with the printed text kept as evidence, not the UNASSIGNED sentinel. An ambiguous supplier is queued and deliberately NOT registered, so the same invoice re-raises it every run — report it once, then say it is still waiting on him. A merge now moves the invoices themselves, so re-running reconciliation after one is not optional. Duplicate invoice numbers and near-duplicate untitled invoices go to needs-review.',
+      'The Google Sheets API and the auth/spreadsheets scope are no longer requested, and google_oauth.py no longer writes SHEETS_REFRESH_TOKEN — it was always the same physical token as GMAIL_REFRESH_TOKEN, and there is no Sheet left to address. The script now ends by pointing at Step 3j, because minting the token locally is only half of what setup needs.',
+      'plugin-update separates the two credential questions that an upgraded install answers differently: #3 is what the gateway holds in Vault, #9 is what download_invoices.py needs locally. Finding a value in settings.local.json says nothing about whether the gateway has it — which is precisely the state every pre-v0.14.0 install is in. Also fixed: a note pointing at check #7 for the bowl definition, left over from the v0.13.0 renumber (it is #5), and a misfiled-statements cleanup that told the agent to delete rows it has no tool to delete.',
+      'NEW tests/test_consistency.py — 14 unit tests, no dependencies. This repo ships instructions rather than code, so its characteristic bug is drift that nothing can fail on: the gateway changes, some skills are updated, one is not. The tests assert that the agent\'s tool table IS the gateway\'s tool list exactly, that no prose names a tool that does not exist or a retired one without marking it retired, that retired vocabulary stays retired, that no skill tells the agent to send credentials, that the three version fields move together, and that cross-references between skills point at steps that exist. Each was mutation-checked against the v0.13.0 defects it is meant to catch — one of them failed that check first time (the credential pattern excluded "." and so missed "settings.local.json", the exact line it was written for) and was fixed.',
+    ],
+  },
   {
     version: 'v0.13.0',
     date: 'Jul 24, 2026',

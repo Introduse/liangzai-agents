@@ -3,8 +3,8 @@ name: supplier-invoice-manager
 description: >-
   Log Liang Zai's supplier invoices and reconcile them against each month's
   Statements of Account. Run weekly to classify that week's mailbox attachments and log
-  the INVOICES, split by outlet — statements are left for month
-  end. Run monthly (after the 4th, when SOAs land) to log the statements, catch any
+  the INVOICES, split by outlet — statements are left for month end.
+  Run monthly (after the 4th, when SOAs land) to log the statements, catch any
   straggler invoice, and match each supplier's statement line-by-line against what was
   logged. Use whenever the user says capture invoices, log invoices, reconcile, check the
   statement, month-end close, or asks why a supplier total does not match.
@@ -25,18 +25,19 @@ skip it.
 never approves and it never pays. There is no `Approved` and no `Paid` status anywhere
 in this system. Every flagged item and every payment goes through the owner.
 
-Pass the plugin's `gateway_api_key`, plus the Google credentials from
-`.claude/settings.local.json`, on every `liangzai_*` call — see `agents/liangzai.md` for
-the exact argument names.
+Pass the plugin's `gateway_api_key` on every `liangzai_*` call. **That is the only
+argument you supply** — the gateway holds its own Google, mailbox and Loyverse credentials
+server-side. If a tool's schema still shows `spreadsheet_id` or `sheets_refresh_token`, the
+connector has cached an old tool list: reconnect it rather than filling the fields in.
 
 ---
 
 ## Classify before you write — this is where the last run went wrong
 
 The download fetches **every attachment** in the mailbox. It does not know an invoice from
-a statement, and neither tab can tell. **You** must, before a single row is written.
+a statement, and neither does the database. **You** must, before a single row is written.
 
-The first live run misfiled a supplier's Statement of Account into `invoice_log`, and the
+The first live run misfiled a supplier's Statement of Account as an invoice, and the
 owner had to unpick it by hand. It is not merely untidy: **reconciliation does not filter on
 status**, so a junk row is reconciled anyway — grouped under a supplier and outlet no
 statement line can ever match — and manufactures a variance that is not real.
@@ -54,7 +55,7 @@ detail is a statement even if it says "Invoice".
 **Never guess.** If it is genuinely ambiguous, or it is neither — a price list, a marketing
 PDF, a scan you cannot read — **write nothing** and report it by filename and sender. The
 owner is told, so nothing is silently dropped; but a non-money document never enters a money
-tab, where reconciliation would pick it up and invent a variance.
+table, where reconciliation would pick it up and invent a variance.
 
 ---
 
@@ -78,8 +79,9 @@ a statement — that is your job, above.
 > Call **`liangzai_pending_documents`**.
 
 **Skip every attachment named in `processed`.** Do not re-read the PDF, do not re-extract, do not
-re-append. See *The dedupe* below — this is the guard that makes a re-run safe, and it is
-not optional.
+re-append. See *The dedupe* below — this is what makes a re-run cheap, and it is not
+optional. (`pending` is empty until the gateway polls the mailbox itself; today the queue
+learns about a document when you append it, so `processed` is the field to read.)
 
 ### 3. Classify, then route
 
@@ -114,9 +116,9 @@ Rules that matter more than speed:
 
 - **ONE ROW PER PRINTED LINE, IN THE DOCUMENT'S OWN ORDER, TOP TO BOTTOM.** Never reorder.
   Never merge two printed lines into one. Never drop a line you cannot read — emit it with
-  empty fields instead. **The line's position is part of its identity** (see *The dedupe*):
-  change the order and the same line becomes a different row, the dedupe misses it, and the
-  money is logged twice with no error anywhere.
+  empty fields instead. What you send **replaces** everything previously recorded for that
+  document (see *The dedupe*), so a lazier second reading does not sit alongside the good
+  first one — it overwrites it.
 - **Copy `supplier_raw` and `delivery_text` verbatim.** Do not tidy them — the
   canonicaliser needs the raw string, and a "helpful" correction destroys the only
   evidence of what the supplier wrote.
@@ -137,12 +139,13 @@ Rules that matter more than speed:
 
 The gateway checks each invoice's line sum against its stated total; a mismatch writes
 the lines anyway with `needs_review` and the arithmetic in the reason. Outlets are
-canonicalised — an unresolved one becomes `needs_review` with `UNASSIGNED`, **never a
-guess**.
+canonicalised — an unresolved one is stored with no outlet, marked `needs_review`, with the
+printed delivery text kept as evidence, **never a guess**.
 
-Re-running is safe **only because you skipped the already-logged attachments in step 2**.
-Do not lean on `source_ref` alone to save you — read *The dedupe* below and understand why
-it can fail silently.
+Two more things it now refuses to accept quietly: the same `invoice_no` from the same
+supplier twice, and — where an invoice carries no number — a near-match on the same
+supplier, date and total. Both go to `needs_review` rather than being silently accepted or
+silently dropped. If you see one, the invoice probably arrived twice; say so.
 
 **Suppliers register themselves.** A supplier you have never seen is recorded automatically,
 keyed on the sender's email domain — no list to maintain, nothing to ask him. The response
@@ -156,6 +159,11 @@ carries two fields:
   or a *different company with a similar name*, and guessing wrong corrupts reconciliation
   while every total still looks reasonable. Put the question to him plainly — *"is this the
   same company?"* — and if he says yes, call **`liangzai_merge_suppliers`**.
+
+  **It will be raised again next week.** The refusal deliberately does not register the
+  supplier, so the same invoice re-raises it on every run until he rules. The gateway
+  queues it once rather than once per run; do the same in your report — raise it the first
+  time, then say it is still waiting on him, and don't re-present it as news.
 
 Why the machine registers but never merges: **creating** a supplier is safe (the worst case
 is a duplicate you merge later), while **merging** two is not. That asymmetry is the whole
@@ -171,34 +179,31 @@ period permanently.
 
 ## The dedupe — read this before you re-run anything
 
-Both tabs skip rows whose `source_ref` is already present. The key is:
+**A document's identity is the document.** `{gmail_msg_id}:{attachment_id}` — both come
+from Gmail and neither ever moves. Re-sending an invoice or a statement **replaces**
+everything previously recorded for it, inside one transaction: the lines are rewritten, not
+appended to.
 
-```
-source_ref = {gmail_msg_id}:{attachment_id}:{line_index}
-```
+This changed, and it changed in your favour. A line used to be identified by its *position*
+in whatever array you happened to extract, so a second pass that reordered or merged lines
+produced different keys, the dedupe missed, and the same money was logged twice with no
+error anywhere. That failure is now structurally impossible — a re-read lands on the same
+document row and overwrites it, however differently you read it.
 
-`gmail_msg_id` and `attachment_id` come from Gmail and never move. **`line_index` does
-not** — it is the position of the line in the array *you* extracted, not a property of the
-document.
+So the rule survives, but for a different reason:
 
-So if a second pass over the same PDF reorders the lines, merges two printed lines into
-one, or skips a line it read last time, **every following index shifts, every `source_ref`
-changes, and the dedupe silently fails.** The same invoice is logged twice. There is no
-error, no flag, and the total in a tab the owner trusts is simply wrong.
+1. **Never re-extract a document that is already recorded.** Call
+   **`liangzai_pending_documents`** first and skip everything in `processed`. Not because a
+   re-read would double the money — it can't — but because it costs tokens and minutes to
+   arrive back where you already were, and a hurried second reading **overwrites a careful
+   first one**. Replacement cuts both ways.
+2. **Extract deterministically anyway** — one row per printed line, in document order. It
+   is what makes two readings of the same invoice agree, and what makes the owner's
+   line-by-line reconciliation legible when he opens it.
 
-Two defences, and you need both:
-
-1. **Extract deterministically** — one row per printed line, in document order. That is what
-   keeps the index stable.
-2. **Never re-extract a document that is already logged.** Call
-   **`liangzai_pending_documents`** first and skip everything in `processed`. This is the
-   stronger guard, because it means a second pass never happens at all — nothing can drift
-   if nothing is re-read.
-
-   The gateway now backs this up: a re-sent document REPLACES what was recorded for it
-   rather than adding a second copy, so a genuine correction is safe. That is a safety net,
-   not a licence to skip step 2 — re-reading a PDF costs tokens and time for no gain, and
-   the skip is still the rule.
+A genuine correction is now a supported operation rather than a hazard: re-send the
+document and the record is replaced. That is the safety net. It is not permission to skip
+step 1.
 
 ---
 
@@ -242,12 +247,14 @@ one call answers for both. Then classify what remains with the rule at the top:
 }]}
 ```
 
-**The same extraction rules apply here, and for the same reason.** A statement row is
-identified by its position within that statement:
+**The same extraction rules apply here, and for the same reason.** Re-sending a statement
+replaces its rows rather than adding a second set — the statement side got that fix
+alongside the invoice side, and it matters more here, because a doubled statement total does
+not look like a bug. It looks like a supplier dispute.
 
 - **ONE ROW PER PRINTED LINE OF THE STATEMENT, IN ITS OWN ORDER, TOP TO BOTTOM.** Never
   reorder, never merge, never drop a line you cannot read — emit it with empty fields. The
-  row's position is part of its identity.
+  owner reconciles this line by line against his own records; the order is how he reads it.
 - **Copy `supplier_raw` and `delivery_text` verbatim.**
 - **`stated_total` is the statement's own printed total.** If it prints none, leave it null.
 
@@ -276,9 +283,12 @@ inexplicable:
 > *EcoGreen Packaging* has invoices but no statement, and *Ecogreen Pkg Services* has a
 > statement but no invoices. Are these the same company?
 
-If he says yes → **`liangzai_merge_suppliers`** → re-run reconciliation. The rows upsert, so
-they correct in place; nothing is re-entered. If he says no, leave them apart — they really
-are two suppliers, and the `SOA_MISSING` is real.
+If he says yes → **`liangzai_merge_suppliers`** → re-run reconciliation. The merge moves the
+invoices and statements themselves, not just the supplier's aliases, and clears the
+reconciliation it invalidated so the re-run rebuilds it; nothing is re-entered. **Re-running
+reconciliation after a merge is not optional** — until you do, the month still shows the
+split. If he says no, leave them apart — they really are two suppliers, and the
+`SOA_MISSING` is real.
 
 Month one will be noisy — rounding, GST inclusivity, partial deliveries. That is the
 system working. The owner is the filter.
@@ -290,14 +300,20 @@ system working. The owner is the filter.
 
 Flagged and needs-review rows lead; matched follow. The footer states, in both
 languages, that nothing has been approved or paid. The gateway refuses any recipient
-outside `SUMMARY_RECIPIENTS` — the agent must never write to a supplier.
+outside the `summary_recipients` allowlist it holds — the agent must never write to a
+supplier.
 
 ### The button does not approve anything
 
-It deep-links to the `reconciliation` tab. The owner changes the status himself, from a
-dropdown: `审核中 Under Review` → `待付款 Ready for Payment`. Do not replace this with a
-one-click approval link — mail scanners fetch URLs before a human clicks, and a scanner
-would silently mark rows ready that the owner never opened.
+It deep-links to the gateway's own reconciliation view (`/reconcile?period=…`), where the
+owner changes the status himself: `审核中 Under Review` → `待付款 Ready for Payment`. Do not
+replace this with a one-click approval link — mail scanners fetch URLs before a human
+clicks, and a scanner would silently mark rows ready that the owner never opened.
+
+**That screen is still being built.** Until it lands, the link may not resolve to anything
+he can act on. Say so if he asks, rather than talking him through a page that isn't there
+— and never offer to set the status for him instead. You cannot: the database refuses it
+for anyone who is not the owner, which is the point.
 
 ### The owner owns the payment-status column
 

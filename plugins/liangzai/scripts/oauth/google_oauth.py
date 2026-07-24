@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""One-time OAuth consent for the supplier mailbox + tracker Sheet.
+"""One-time OAuth consent for the supplier mailbox.
 
-Mints refresh tokens for three scopes:
+Mints a refresh token for two scopes:
 
   gmail.readonly  — the Gmail MCP connector cannot download attachment bytes,
                     and supplier invoices arrive as PDF/photo attachments.
@@ -9,7 +9,16 @@ Mints refresh tokens for three scopes:
   gmail.send      — sends the Reconciliation Summary from the mailbox itself,
                     which is the From: line the proposal promised. Send-only:
                     it grants no read access and cannot touch drafts.
-  spreadsheets    — the Drive MCP connector cannot append rows to a Sheet.
+
+There used to be a third, `spreadsheets`, for the tracking Sheet. The Sheet is
+gone — the gateway keeps its data in Postgres — so the scope is no longer
+requested and SHEETS_REFRESH_TOKEN is no longer written. A token minted before
+this change still works: the extra scope is unused, not harmful.
+
+The token lands in two places, for two different consumers: `.claude/settings.
+local.json` for `download_invoices.py`, which runs here, and the gateway's Vault
+for the summary mailer, which does not. `/liangzai-setup` Step 3j does the
+second half — this script only does the first.
 
 Scope classification, since it decides everything below: gmail.readonly is
 RESTRICTED (external apps need an annual third-party security assessment);
@@ -64,7 +73,6 @@ REDIRECT_URI = f"http://localhost:{PORT}"
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/spreadsheets",
 ]
 SETTINGS = Path(__file__).resolve().parents[2] / ".claude" / "settings.local.json"
 
@@ -156,9 +164,11 @@ def exchange(pasted):
                          "Nothing saved — re-run and pick the right account, or fix "
                          "OAUTH_ACCOUNT in .claude/settings.local.json.")
 
-    # One consent covers all three scopes, so both tokens are the same value.
-    save(GMAIL_REFRESH_TOKEN=refresh, SHEETS_REFRESH_TOKEN=refresh)
-    print(f"OK — consented as {email}. Refresh tokens saved to .claude/settings.local.json")
+    save(GMAIL_REFRESH_TOKEN=refresh)
+    print(f"OK — consented as {email}. Refresh token saved to .claude/settings.local.json\n"
+          "NEXT: this is the LOCAL copy, used by download_invoices.py. The gateway needs "
+          "its own — store it with liangzai_store_credential (setup Step 3j) or the "
+          "summary email cannot send.")
 
 
 def main():
