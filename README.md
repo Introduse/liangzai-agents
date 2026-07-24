@@ -4,11 +4,12 @@ A **Claude plugin** for Liang Zai Prawn Noodle's back-office: capture supplier i
 Loyverse sales, reconcile each month's Statements of Account line-by-line, and track supplier
 cost per bowl. The skills run inside the owner's own Claude Cowork project and drive the
 private [liangzai-gateway](https://github.com/Introduse/liangzai-gateway) MCP server, which
-does all the Sheet/Loyverse/Gmail work.
+owns the database and does all the Loyverse/Gmail work.
 
-The credentials are split between the two. The gateway holds the Loyverse token. The Google
-and mailer credentials live *here*, in the project's `.claude/settings.local.json`, and
-travel to the gateway as arguments on every call.
+**The gateway holds every credential.** Google, the mailbox settings and the Loyverse token
+all live server-side in Supabase Vault. This plugin sends exactly one thing: the gateway API
+key. It used to send seven credentials on every call, because the gateway had nowhere to put
+them; it does now.
 
 Built by [Five Bucks Ventures](https://fivebucksventures.com).
 
@@ -29,25 +30,25 @@ liangzai-agents (THIS REPO — the plugin)         liangzai-gateway (remote MCP,
   skills drive the workflow; Claude       ──MCP──▶  liangzai_* tools:
   extracts invoice PDFs and calls                     reconcile · capture_sales ·
   the gateway                                         append_invoice_log · compute_cost ·
-  download_invoices.py runs LOCALLY                   send_summary · init_sheet · …
-  (the Gmail connector can't fetch                    → Google Sheets (source of truth)
+  download_invoices.py runs LOCALLY                   send_summary · pending_documents · …
+  (the Gmail connector can't fetch                    → Supabase Postgres (source of truth)
    attachment bytes)
 ```
 
 Only two scripts run locally, on the owner's machine: `download_invoices.py` (Claude reads
 the downloaded PDFs to extract line items) and `google_oauth.py` (one-time consent to mint
-the Google refresh token). Everything else — reconciliation, cost math, all Sheet/Loyverse/
-Gmail calls — happens in the gateway.
+the Google refresh token). Everything else — reconciliation, cost math, every database
+write, all Loyverse and Gmail calls — happens in the gateway.
 
-Those gateway calls carry the Google and mailer credentials with them, read out of
-`.claude/settings.local.json` on each request. `agents/liangzai.md` lists which argument
-maps to which key, and which tools need them.
+Those calls carry no credentials. If a tool's schema still shows `spreadsheet_id` or
+`sheets_refresh_token`, the connector has cached an old tool list: reconnect it rather than
+filling the fields in.
 
 ## The skills
 
 | Skill | Does |
 |---|---|
-| `liangzai-setup` | First-run onboarding: connect the gateway, mint the local Google token, create the Sheet, confirm the bowl definition, and embed the agent into the workspace `CLAUDE.md` |
+| `liangzai-setup` | First-run onboarding: connect the gateway, mint the Google token, confirm the Loyverse mapping and the bowl definition, and embed the agent into the workspace `CLAUDE.md` |
 | `supplier-invoice-manager` | **Weekly** — download + extract invoices → `liangzai_append_invoice_log`. **Monthly** — extract statements, `liangzai_run_reconciliation`, `liangzai_send_summary` |
 | `cost-optimizer` | **Weekly** — `liangzai_capture_sales`. **Monthly** — `liangzai_compute_cost_per_bowl`. **Ad hoc** — `liangzai_daily_sales` for live per-outlet sales in SGD |
 | `plugin-update` | Idempotent catch-up after an upgrade — detects gaps (connector, token, tabs, outlet map, bowl definition, CLAUDE.md embed) and fills only what's missing |
@@ -85,7 +86,7 @@ plugins/liangzai/
 1. Add this repo as a plugin marketplace in Claude, then install the **liangzai** plugin.
 2. Paste the gateway API key (`liangzai_live_…`) when prompted for `gateway_api_key`.
 3. Run **`/liangzai-setup`** and follow it end to end — it walks through the gateway
-   connector, Google access, the Sheet, the bowl definition, and the workspace `CLAUDE.md`.
+   connector, Google access, the bowl definition, and the workspace `CLAUDE.md`.
 
 The 30-day Loyverse note, in one line: the free plan refuses receipts older than 31 days, so
 sales accumulate forward — the weekly run records what it can see, the monthly run tallies it,
@@ -98,7 +99,5 @@ All the reconciliation and cost logic lives in the private
 MCP server on Vercel. Deploy it, register `https://<app>.vercel.app/api/mcp` as a Cowork
 custom connector, and put that URL in `plugins/liangzai/.mcp.json`.
 
-It needs two env vars of its own: `GATEWAY_API_KEY_SHA256` and `LOYVERSE_ACCESS_TOKEN`. The
-Google, mailer, and `SPREADSHEET_ID` vars can also be set there, but only as a fallback for
-calls that omit them — this plugin sends its own (including `spreadsheet_id`, recorded in
-`.claude/settings.local.json` at setup) on every call.
+It holds its own credentials — Supabase Vault first, its Vercel env vars as the bootstrap
+fallback. Nothing this plugin does supplies them. See the gateway's README for the list.

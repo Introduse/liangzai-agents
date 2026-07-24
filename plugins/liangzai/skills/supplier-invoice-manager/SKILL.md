@@ -3,13 +3,13 @@ name: supplier-invoice-manager
 description: >-
   Log Liang Zai's supplier invoices and reconcile them against each month's
   Statements of Account. Run weekly to classify that week's mailbox attachments and log
-  the INVOICES into the tracking Sheet, split by outlet — statements are left for month
+  the INVOICES, split by outlet — statements are left for month
   end. Run monthly (after the 4th, when SOAs land) to log the statements, catch any
   straggler invoice, and match each supplier's statement line-by-line against what was
   logged. Use whenever the user says capture invoices, log invoices, reconcile, check the
   statement, month-end close, or asks why a supplier total does not match.
 area: Invoicing
-use_for: "Weekly: classify mailbox attachments, log INVOICES to the Sheet by outlet, defer statements. Monthly: log the statements + any straggler invoice, reconcile, flag variance, email the owner. Every append is deduped."
+use_for: "Weekly: classify mailbox attachments, record INVOICES by outlet, defer statements. Monthly: log the statements + any straggler invoice, reconcile, flag variance, email the owner. Every append is deduped."
 ---
 
 # Supplier Invoice Manager
@@ -73,11 +73,11 @@ does I/O only: writes **every** attachment to `cache/<msg_id>/` and an index at
 `cache/manifest.json`. It never parses, and it makes no distinction between an invoice and
 a statement — that is your job, above.
 
-### 2. Skip what is already logged
+### 2. Skip what is already recorded
 
-> Call **`liangzai_logged_attachments`** with `tab: "invoice_log"`.
+> Call **`liangzai_pending_documents`**.
 
-**Skip every attachment it names.** Do not re-read the PDF, do not re-extract, do not
+**Skip every attachment named in `processed`.** Do not re-read the PDF, do not re-extract, do not
 re-append. See *The dedupe* below — this is the guard that makes a re-run safe, and it is
 not optional.
 
@@ -85,8 +85,8 @@ not optional.
 
 Apply the rule above to each remaining attachment:
 
-- **Invoice** → extract it (step 4) and append to `invoice_log` (step 5).
-- **Statement** → **do not append it.** The weekly run does not touch `soa_entries`. Count
+- **Invoice** → extract it (step 4) and record it (step 5).
+- **Statement** → **do not append it.** The weekly run does not record statements. Count
   it and say so: *"2 statements arrived — they'll be reconciled at month end."*
 - **Neither** → write nothing. Report the filename and sender.
 
@@ -191,9 +191,14 @@ Two defences, and you need both:
 1. **Extract deterministically** — one row per printed line, in document order. That is what
    keeps the index stable.
 2. **Never re-extract a document that is already logged.** Call
-   **`liangzai_logged_attachments`** first and skip those attachments entirely. This is the
+   **`liangzai_pending_documents`** first and skip everything in `processed`. This is the
    stronger guard, because it means a second pass never happens at all — nothing can drift
    if nothing is re-read.
+
+   The gateway now backs this up: a re-sent document REPLACES what was recorded for it
+   rather than adding a second copy, so a genuine correction is safe. That is a safety net,
+   not a licence to skip step 2 — re-reading a PDF costs tokens and time for no gain, and
+   the skip is still the rule.
 
 ---
 
@@ -212,13 +217,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/capture/download_invoices.py --days 14
 Fourteen days, not seven: wide enough to catch statements sent on the 1st–6th **and** any
 invoice that landed after the last weekly run.
 
-### 2. Skip what is already logged, then classify
+### 2. Skip what is already recorded, then classify
 
-> Call **`liangzai_logged_attachments`** for **`invoice_log`** *and* for **`soa_entries`**.
+> Call **`liangzai_pending_documents`**.
 
-Skip every attachment either one names. Then classify what remains with the rule at the top:
+Skip every attachment named in `processed` — it covers invoices and statements alike, so
+one call answers for both. Then classify what remains with the rule at the top:
 
-- **Statements** → extract and append to `soa_entries` (below).
+- **Statements** → extract and record them (below).
 - **Invoices** → extract and append with **`liangzai_append_invoice_log`**, exactly as the
   weekly capture does. Most will already be logged and skipped; the ones that aren't are the
   stragglers that would otherwise reconcile against nothing.
@@ -236,8 +242,8 @@ Skip every attachment either one names. Then classify what remains with the rule
 }]}
 ```
 
-**The same extraction rules apply here, and for the same reason.** `soa_entries` is keyed on
-`{gmail_msg_id}:{attachment_id}:{row_index}` exactly as `invoice_log` is:
+**The same extraction rules apply here, and for the same reason.** A statement row is
+identified by its position within that statement:
 
 - **ONE ROW PER PRINTED LINE OF THE STATEMENT, IN ITS OWN ORDER, TOP TO BOTTOM.** Never
   reorder, never merge, never drop a line you cannot read — emit it with empty fields. The

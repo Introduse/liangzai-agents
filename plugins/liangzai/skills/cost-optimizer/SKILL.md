@@ -2,7 +2,7 @@
 name: cost-optimizer
 description: >-
   Work out Liang Zai's real cost per bowl, per outlet, per month. Run weekly to record
-  that week's Loyverse sales into the tracking Sheet; run monthly to tally those sales
+  that week's Loyverse sales; run monthly to tally those sales
   into bowls, pair each outlet's bowls with its reconciled supplier cost, and write
   cost-per-bowl. Use whenever the user asks about cost per bowl, margin, bowls sold,
   Loyverse sales, how much an outlet sold today or this week, or which outlet is getting
@@ -119,7 +119,7 @@ email.
 
 Separate from everything above. When the owner asks *"how much did we sell today?"* — or this
 week, or per outlet — that is a **revenue** question, not a cost-per-bowl one, and it has its
-own tool. Nothing here writes to the Sheet or sends an email; it is just an answer to a
+own tool. Nothing here writes anything or sends an email; it is just an answer to a
 question he asked.
 
 > Call **`liangzai_daily_sales`** (`days: 1` = today only, the default; `days: 7` = the

@@ -22,39 +22,20 @@ and every payment goes through the owner, at his bank.
 
 ## How the work runs
 
-Almost everything happens in the **gateway** — a remote MCP server and the single
-writer to the tracking Sheet. It does **not** hold the Google or mailer credentials
-itself: those live in `.claude/settings.local.json` on this machine, and you send them
-as arguments on every call. Only the Loyverse token stays gateway-side.
+Almost everything happens in the **gateway** — a remote MCP server and the single writer
+to the database. It holds its own credentials now: Google, the mailbox settings and the
+Loyverse token all live in Supabase Vault, server-side. **You do not send credentials on
+any call.** If a credential is missing the gateway says so plainly; the fix is
+`/liangzai-setup`, never an argument you add.
 
 Every gateway tool is named `liangzai_*` and takes **`gateway_api_key` as its first
 argument** — pass the value from the plugin's `gateway_api_key` config on every
 call. (If the connector was added with an `x-api-key` header, the tools accept that
 instead and you can omit the argument.)
 
-### The credentials you must send
-
-Read these from the `env` block of `.claude/settings.local.json` and pass them on every
-call to the tools listed:
-
-| Tool argument | Source env key | Send it on |
-|---|---|---|
-| `google_client_id` | `GOOGLE_CLIENT_ID` | every tool below except `liangzai_ping` |
-| `google_client_secret` | `GOOGLE_CLIENT_SECRET` | same |
-| `sheets_refresh_token` | `SHEETS_REFRESH_TOKEN` | same |
-| `spreadsheet_id` | `SPREADSHEET_ID` | same |
-| `gmail_refresh_token` | `GMAIL_REFRESH_TOKEN` | `liangzai_send_summary`, `liangzai_send_run_report` |
-| `supplier_mailbox` | `SUPPLIER_MAILBOX` | same two |
-| `summary_recipients` | `SUMMARY_RECIPIENTS` | same two |
-
-**`liangzai_ping` is the only tool that needs none of these.** Everything else does —
-including `liangzai_bowl_checklist`, which looks like a pure Loyverse read but also reads
-`agent_config` to label each item with the outlet that sold it.
-
-If a value is missing from `.claude/settings.local.json`, stop and tell the user to run
-`/liangzai-setup` or `/plugin-update`. Never guess one, and never just leave the argument
-out — the gateway will silently fall back to whatever it has in its own environment, which
-may be a different Sheet or a different mailbox than the one the owner set up.
+That key is the only thing you send. If a tool still shows `spreadsheet_id`,
+`sheets_refresh_token` or the other credential arguments in its schema, your connector is
+**stale** — reconnect it rather than filling them in.
 
 The gateway tools:
 
@@ -64,19 +45,18 @@ a **stale connector**, not a missing gateway feature.
 
 | Tool | Does |
 |---|---|
-| `liangzai_ping` | Health check. `pong` when the connector and key are good. The only tool needing no credentials |
-| `liangzai_get_config` | Read the saved outlet map and bowl definition. Read-only |
-| `liangzai_init_sheet` | Create the Sheet's tabs and bilingual headers. Also ensures the status dropdowns — on existing tabs too, not just new ones |
-| `liangzai_loyverse_stores` | List Loyverse stores; `write_config:true` saves the outlet map |
+| `liangzai_ping` | Health check. `pong` when the connector and key are good |
+| `liangzai_get_config` | Read the six stalls and the bowl definition. Read-only |
+| `liangzai_loyverse_stores` | Check the Loyverse token can see all six stalls, by store id. Read-only |
 | `liangzai_list_suppliers` | Every supplier the system knows, and how it recognises them. Read-only |
 | `liangzai_merge_suppliers` | Two registered suppliers are one company. **Only after the owner confirms it** |
 | `liangzai_bowl_checklist` | What sold, grouped into **dishes**, each with a short `ref` (d001…). You classify the dish; the gateway holds the Loyverse ids. **Writes** — it saves the ref→id map |
 | `liangzai_set_bowl_definition` | Record the confirmed bowl definition. Pass `bowl_refs`; the gateway expands each into every id behind that dish |
-| `liangzai_capture_sales` | Record the week's Loyverse sales into `sales_daily` |
+| `liangzai_capture_sales` | Record the week's Loyverse sales — both the per-item quantities and the per-stall revenue |
 | `liangzai_daily_sales` | Live per-outlet sales in SGD for a day or trailing window, straight from Loyverse. Read-only — the "how much did each stall take today" figure, not the cost-per-bowl one |
-| `liangzai_logged_attachments` | Which attachments are already in a tab. **Call it before extracting anything** — skip those; do not re-read them |
-| `liangzai_append_invoice_log` | Append extracted invoice line items |
-| `liangzai_append_soa_entries` | Append extracted Statement-of-Account rows |
+| `liangzai_pending_documents` | The ingestion worklist. **Call it before extracting anything** — skip every attachment in `processed`; do not re-read them |
+| `liangzai_append_invoice_log` | Record extracted invoices. Re-sending one REPLACES it rather than adding a copy |
+| `liangzai_append_soa_entries` | Record extracted Statement-of-Account rows. Re-sending one replaces its rows |
 | `liangzai_run_reconciliation` | Reconcile a month, write `reconciliation` + detail |
 | `liangzai_compute_cost_per_bowl` | Tally bowls, pair with reconciled cost |
 | `liangzai_send_summary` | Build/send the bilingual reconciliation summary |
@@ -94,7 +74,7 @@ The flow is: **skip what is already logged → download → CLASSIFY each attach
 reported, not written.
 
 **The classification is yours, and it is not optional.** The downloader fetches every
-attachment and cannot tell an invoice from a statement; neither can the Sheet. A statement
+attachment and cannot tell an invoice from a statement; neither can the database. A statement
 misfiled into `invoice_log` is not merely untidy — reconciliation does not filter on status,
 so it is reconciled anyway and manufactures a variance that is not real. It has already
 happened once.

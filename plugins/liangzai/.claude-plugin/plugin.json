@@ -1,7 +1,7 @@
 {
   "name": "liangzai",
-  "version": "0.12.0",
-  "description": "Liang Zai agents — supplier invoice reconciliation and cost-per-bowl tracking. Skills call the liangzai gateway MCP for all Sheet, Loyverse, and Gmail-send work; only the invoice download runs locally (the Gmail connector cannot fetch attachment bytes).",
+  "version": "0.13.0",
+  "description": "Liang Zai agents \u2014 supplier invoice reconciliation and cost-per-bowl tracking. Skills call the liangzai gateway MCP for all database, Loyverse, and Gmail-send work; only the invoice download runs locally (the Gmail connector cannot fetch attachment bytes).",
   "author": {
     "name": "Five Bucks Ventures",
     "email": "petric@fivebucksventures.com",
@@ -10,13 +10,22 @@
   "homepage": "https://github.com/Introduse/liangzai-agents",
   "repository": "https://github.com/Introduse/liangzai-agents",
   "license": "proprietary",
-  "keywords": ["reconciliation", "invoices", "loyverse", "cost-per-bowl", "google-sheets", "f&b", "bilingual", "mcp"],
+  "keywords": [
+    "reconciliation",
+    "invoices",
+    "loyverse",
+    "cost-per-bowl",
+    "postgres",
+    "f&b",
+    "bilingual",
+    "mcp"
+  ],
   "skills": "./skills/",
   "agents": "./agents/",
   "mcpServers": "./.mcp.json",
   "userConfig": {
     "gateway_api_key": {
-      "description": "Liang Zai gateway API key (liangzai_live_… — generated when the gateway is deployed). Passed as gateway_api_key on every liangzai_* tool call.",
+      "description": "Liang Zai gateway API key (liangzai_live_\u2026 \u2014 generated when the gateway is deployed). Passed as gateway_api_key on every liangzai_* tool call.",
       "sensitive": true
     }
   }

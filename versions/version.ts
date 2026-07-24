@@ -1,8 +1,8 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.12.0';
-const DEFAULT_DATE = 'Jul 18, 2026';
+const DEFAULT_VERSION = 'v0.13.0';
+const DEFAULT_DATE = 'Jul 24, 2026';
 
 // Export constants initially with default values
 export const APP_VERSION = DEFAULT_VERSION;
@@ -11,6 +11,17 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.13.0',
+    date: 'Jul 24, 2026',
+    changes: [
+      'The gateway moved to Postgres and deleted its Google Sheet layer (gateway Phase 1), so this release stops the plugin telling the owner to set up things that no longer exist. liangzai-setup Step 4 recorded a spreadsheet_id and called liangzai_init_sheet to create seven tabs; both are gone — the schema is migrations, applied once at install. The step is kept as a numbered placeholder so every cross-reference to Steps 5-10 still lines up.',
+      'agents/liangzai.md no longer sends credentials. The gateway holds its own in Supabase Vault, so gateway_api_key is now the ONLY argument the agent supplies. The identity says so explicitly, and adds the tell: a tool still advertising spreadsheet_id or sheets_refresh_token means a STALE connector, and the fix is to reconnect rather than to fill the field in.',
+      'liangzai_logged_attachments is replaced by liangzai_pending_documents in supplier-invoice-manager. The dedupe rule is unchanged and the wire format is identical (gmail_msg_id:attachment_id in `processed`), so the skill reads the same way — but it now also reports what is QUEUED and what FAILED, which is what Phase 2 fills. Recorded alongside it: the gateway now REPLACES a re-sent document rather than appending a copy, so a genuine correction is safe. That is a safety net, not a licence to skip the skip.',
+      'liangzai_loyverse_stores loses write_config. The six stalls are seeded server-side, and letting Loyverse overwrite our outlet names would be dangerous — that name is the key every historical row is filed under. The tool now checks by STORE ID (a renamed stall is cosmetic; a stall the token cannot see is a silent hole in the sales data) and reports renames without acting on them.',
+      'plugin-update rewritten around what can now actually be checked: liangzai_list_credentials replaces hunting for Google keys in settings.local.json, the Sheet-tabs and Sheet-id checks are deleted, and the stale-connector check names liangzai_pending_documents — seeing the OLD tool name is itself proof the connector is stale.',
+    ],
+  },
   {
     version: 'v0.12.0',
     date: 'Jul 18, 2026',

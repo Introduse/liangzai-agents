@@ -3,7 +3,7 @@ name: liangzai-setup
 description: >-
   Run once, inside the owner's Claude Cowork project, to wire up the Liang Zai agents:
   connect the liangzai gateway, register the Google refresh token locally for invoice
-  downloads, create the Sheet, confirm the Loyverse mapping, record what counts as a
+  downloads, confirm the Loyverse mapping, record what counts as a
   bowl, and embed the agent into the workspace CLAUDE.md. Use when the user says "set
   up", "get started", "onboard", "first run", or when any Liang Zai skill reports a
   missing connector, key, or bowl definition.
@@ -56,7 +56,7 @@ Then have the user **open the project session** and re-run:
 
 ## Step 2 — Connect the gateway
 
-The gateway is where the Sheet writes, reconciliation, and the summary email happen. It
+The gateway is where every write, the reconciliation, and the summary email happen. It
 must be connected first — every `liangzai_*` tool depends on it.
 
 > 1. **Settings → Connectors → "Add custom connector".**
@@ -166,7 +166,7 @@ quietly become the inbox the agent reads.
 
 This file is the only copy of these values anywhere. The agent reads them straight out of
 it and passes them to the gateway on every `liangzai_*` call, so if they are wrong or
-missing here, nothing works — not the local download, not the Sheet.
+missing here, nothing works — not the local download, not the mailbox reads.
 
 ### 3g. Get the sign-in link and give it to him
 
@@ -228,49 +228,32 @@ owner.
 | `Internal` is greyed out | Not signed in with a Google Workspace account. Sign in with one. |
 | Token stops working after ~7 days | The app was left **External / Testing**. Recreate it as **Internal** (3c). |
 
-## Step 4 — Record the Sheet, then create its tabs
+## Step 4 — Nothing to set up here
 
-### 4a. Record which Sheet to use
+*This step used to record a `spreadsheet_id` and then call `liangzai_init_sheet` to create
+seven tabs. Both are gone. The gateway keeps its data in its own Postgres database, whose
+schema is applied once at install by migrations — there is no spreadsheet to name and no
+tabs for a tool to create. Kept as a numbered step so the rest of this skill's numbering,
+and every reference to it elsewhere, still lines up.*
 
-The gateway writes to whichever Google Sheet you name. It reads a **`spreadsheet_id`** you
-send on every call (out of `.claude/settings.local.json`, exactly like the Google
-credentials from Step 3); only if you send none does it fall back to a `SPREADSHEET_ID` set
-in the gateway's own Vercel env. Recording it locally is what points the whole system at
-*this owner's* Sheet — so do it here, before the first Sheet call.
+**Skip straight to Step 5.**
 
-> Ask the owner for the **Invoice log and Cost tracker** Sheet — the link to it. It looks
-> like `https://docs.google.com/spreadsheets/d/`**`<the id>`**`/edit`. The id is the long
-> segment between `/d/` and `/edit`.
 
-Write that id as **`SPREADSHEET_ID`** into the `env` block of `.claude/settings.local.json`,
-next to the values Step 3 wrote. Confirm the mailbox account (the one you authorised in
-Step 3) can actually edit the Sheet — if it can't, every write fails later with a
-permission error, not a wrong-id error.
+## Step 5 — Check Loyverse can see all six stalls
 
-**If the owner has no Sheet yet**, have him make an empty Google Sheet, share edit access
-with the mailbox account, and give you its link — Step 4b fills it with the tabs.
+> Call **`liangzai_loyverse_stores`**.
 
-### 4b. Create the tabs
+The six stalls already exist in the gateway's database, seeded at install, so there is
+nothing to write — this is a check, not a setup step. It must report **6 stores** and an
+empty `missing`. Anything in `missing` means the token is scoped wrong, and that stall's
+sales will silently never be captured.
 
-> Call **`liangzai_init_sheet`**.
-
-It creates `invoice_log`, `soa_entries`, `reconciliation`, `reconciliation_detail`,
-`sales_daily`, `cost_tracking`, and `agent_config` with bilingual headers, the
-payment-status dropdown on `reconciliation`, and the 状态 Status dropdown on `invoice_log`
-and `soa_entries`. Idempotent, and safe to re-run on a Sheet that already has tabs — it
-fully styles only the tabs it creates (so it never stomps formatting the owner has changed),
-but it ensures the dropdowns on tabs that already exist, because those are a data contract
-rather than decoration.
-
-**This must run before Step 5** — `loyverse_stores write_config` writes the outlet map into
-`agent_config`, which only exists once this runs.
-
-## Step 5 — Loyverse & outlet map
-
-> Call **`liangzai_loyverse_stores`** with `write_config: true`.
-
-It must report **6 stores** matching the outlets. Fewer means the token is scoped wrong;
 `HTTP 402` is the plan limit, expected for old receipts (Step 7).
+
+A `renamed` entry is not an error: it means Loyverse now calls a stall something other than
+what we call it. Our name is the key every historical row is filed under, so it is ours to
+change deliberately, never Loyverse's to change under us. Mention it to the owner and move
+on.
 
 ## Step 6 — What counts as a bowl
 
@@ -344,7 +327,9 @@ now is cheap, and getting it wrong today is not permanent.
 Confirm each connection with a low-cost call before handing over:
 
 - **`liangzai_ping`** → `pong` (gateway + key).
-- **`liangzai_loyverse_stores`** (no write) → 6 stores.
+- **`liangzai_list_credentials`** → the services Vault holds. Anything missing here fails
+  later as a confusing runtime error rather than an obvious setup gap.
+- **`liangzai_loyverse_stores`** → 6 stores, empty `missing`.
 - **`liangzai_capture_sales`** with `dry_run: true` → a receipt count, no write.
 - Locally: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/capture/download_invoices.py --days 7 --dry-run`.
   If it finds nothing, suppliers haven't started sending to the mailbox yet — a business
@@ -465,7 +450,7 @@ prompt. Cowork asks him to confirm, and the task appears on its **Scheduled** pa
 
 **The schedule is Cowork's, and only Cowork's.** There is no gateway tool that records it,
 and there must not be: Cowork owns the cadence, fires the jobs, and lists them. A second
-copy in the Sheet would go stale the first time he edits a task, and a stale copy that is
+copy here would go stale the first time he edits a task, and a stale copy that is
 written down looks authoritative. To see or change when the jobs run, look in Cowork.
 
 Create these two:
@@ -519,5 +504,5 @@ Say this plainly — it is the one failure that cannot be undone:
 
 ### 10d. Hand over
 
-One short message: what runs, when, what lands in the Sheet, and that **nothing is ever
+One short message: what runs, when, what gets recorded, and that **nothing is ever
 paid automatically** — every flagged item and every payment goes through him.
