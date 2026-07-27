@@ -1,6 +1,6 @@
 {
   "name": "liangzai",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Liang Zai agents \u2014 supplier invoice reconciliation and cost-per-bowl tracking. Skills drive the workflow and read the invoice PDFs; the liangzai gateway MCP polls the supplier mailbox, owns the database, and does all Loyverse and Gmail work.",
   "author": {
     "name": "Five Bucks Ventures",

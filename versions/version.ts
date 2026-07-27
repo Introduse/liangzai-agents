@@ -1,8 +1,8 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.15.0';
-const DEFAULT_DATE = 'Jul 24, 2026';
+const DEFAULT_VERSION = 'v0.15.1';
+const DEFAULT_DATE = 'Jul 27, 2026';
 
 // Export constants initially with default values
 export const APP_VERSION = DEFAULT_VERSION;
@@ -11,6 +11,13 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.15.1',
+    date: 'Jul 27, 2026',
+    changes: [
+      'Gateway connector URL now points at the production custom domain, https://app.liangzaiprawnnoodle.com/api/mcp, in the installed plugin MCP config and the setup instructions. README now names the live back-office app at app.liangzaiprawnnoodle.com instead of the old Vercel preview-style hostname.',
+    ],
+  },
   {
     version: 'v0.15.0',
     date: 'Jul 24, 2026',
@@ -176,14 +183,6 @@ export const VERSION_HISTORY: Array<{ version: string; date: string; changes: st
       'FIXED version drift: plugin.json and marketplace.json were still on 0.4.0 while version.ts said v0.4.2, because the commit process only ever bumped version.ts. All three now move together, and workflow/commit-to-git.md says so.',
       'agents/liangzai.md tool table was missing liangzai_get_config entirely; added it plus liangzai_set_schedule and liangzai_send_run_report.',
       'Requires gateway v0.6.0 for liangzai_set_schedule, liangzai_send_run_report, and schedule in liangzai_get_config.',
-    ],
-  },
-  {
-    version: 'v0.4.2',
-    date: 'Jul 13, 2026',
-    changes: [
-      'Setup fix (found during a real run): Step 3 never told you to register the OAuth redirect URI, so Google rejected the sign-in with redirect_uri_mismatch. Step 3 now walks the Google Cloud console end to end and calls out adding http://localhost:5179 under Authorized redirect URIs as mandatory, with a troubleshooting note.',
-      'google_oauth.py now prints the required redirect URI alongside the consent link, so the fix is visible at the exact moment you would hit the error.',
     ],
   },
 ];

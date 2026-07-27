@@ -68,7 +68,7 @@ email happen. It must be connected first — every `liangzai_*` tool depends on 
 
 > 1. **Settings → Connectors → "Add custom connector".**
 > 2. Name: `gateway`
-> 3. URL: `https://liangzai-gateway.vercel.app/api/mcp`
+> 3. URL: `https://app.liangzaiprawnnoodle.com/api/mcp`
 > 4. Click **Connect**.
 
 The gateway API key (`liangzai_live_…`) is a plugin setting, not entered in the connector

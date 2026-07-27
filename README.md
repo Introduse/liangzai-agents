@@ -112,9 +112,11 @@ and every read stays inside the window.
 ## The gateway
 
 All the reconciliation and cost logic lives in the private
-[liangzai-gateway](https://github.com/Introduse/liangzai-gateway) — a Next.js + `mcp-handler`
-MCP server on Vercel. Deploy it, register `https://<app>.vercel.app/api/mcp` as a Cowork
-custom connector, and put that URL in `plugins/liangzai/.mcp.json`.
+[liangzai-gateway](https://github.com/Introduse/liangzai-gateway) — a Next.js back-office
+web app and `mcp-handler` MCP server on Vercel, live at
+[app.liangzaiprawnnoodle.com](https://app.liangzaiprawnnoodle.com). Register
+`https://app.liangzaiprawnnoodle.com/api/mcp` as a Cowork custom connector; the same URL
+is already in `plugins/liangzai/.mcp.json`.
 
 It holds its own credentials — Supabase Vault first, its Vercel env vars as the bootstrap
 fallback. `/liangzai-setup` Step 3j writes the Google and mailer ones into the Vault via

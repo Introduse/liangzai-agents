@@ -2,7 +2,7 @@
   "mcpServers": {
     "gateway": {
       "type": "url",
-      "url": "https://liangzai-gateway.vercel.app/api/mcp"
+      "url": "https://app.liangzaiprawnnoodle.com/api/mcp"
     }
   }
 }
