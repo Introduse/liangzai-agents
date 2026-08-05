@@ -1,8 +1,8 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.15.1';
-const DEFAULT_DATE = 'Jul 27, 2026';
+const DEFAULT_VERSION = 'v0.15.2';
+const DEFAULT_DATE = 'Aug 5, 2026';
 
 // Export constants initially with default values
 export const APP_VERSION = DEFAULT_VERSION;
@@ -11,6 +11,15 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.15.2',
+    date: 'Aug 5, 2026',
+    changes: [
+      'Plugin schema compatibility audit: plugin.json `agents` field changed from a bare directory string to the required array-of-paths form ("./agents/liangzai.md") — `claude plugin validate .` was rejecting the string form.',
+      'plugin.json userConfig.gateway_api_key now declares the required `type` ("string") and `title` fields, and adds `required: true` since the plugin cannot authenticate against the gateway without it.',
+      '.mcp.json gateway server: transport `type` changed from the non-standard "url" to "http" to match the current MCP transport schema.',
+    ],
+  },
   {
     version: 'v0.15.1',
     date: 'Jul 27, 2026',

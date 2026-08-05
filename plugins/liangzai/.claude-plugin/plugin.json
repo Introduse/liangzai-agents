@@ -1,6 +1,6 @@
 {
   "name": "liangzai",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "Liang Zai agents \u2014 supplier invoice reconciliation and cost-per-bowl tracking. Skills drive the workflow and read the invoice PDFs; the liangzai gateway MCP polls the supplier mailbox, owns the database, and does all Loyverse and Gmail work.",
   "author": {
     "name": "Five Bucks Ventures",
@@ -21,12 +21,15 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "agents": "./agents/",
+  "agents": ["./agents/liangzai.md"],
   "mcpServers": "./.mcp.json",
   "userConfig": {
     "gateway_api_key": {
+      "type": "string",
+      "title": "Gateway API key",
       "description": "Liang Zai gateway API key (liangzai_live_\u2026 \u2014 generated when the gateway is deployed). Passed as gateway_api_key on every liangzai_* tool call.",
-      "sensitive": true
+      "sensitive": true,
+      "required": true
     }
   }
 }
