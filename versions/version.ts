@@ -1,7 +1,7 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.16.0';
+const DEFAULT_VERSION = 'v0.17.0';
 const DEFAULT_DATE = 'Sep 8, 2026';
 
 // Export constants initially with default values
@@ -11,6 +11,15 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.17.0',
+    date: 'Sep 8, 2026',
+    changes: [
+      'PLUGIN-UPDATE CAN NOW SEE A TOKEN THAT READS THE WRONG MAILBOX — the one fault every other check passed through. #3 asks whether gmail_refresh_token EXISTS and #9 asks whether the queue is being FILLED; between July and September 2026 both answered yes while the poller read a Five Bucks staff inbox instead of the supplier mailbox. The classifier correctly rejected all 128 of August\'s documents as not-an-invoice, month close reported "Everything matched" on a period with no invoices at all, and no check could tell a configured system from a correct one. New check #10 reads liangzai_ping\'s mailbox_matches. Gateway v0.45.0 is required for it — an older gateway returns a bare "pong" and #10 cannot be answered.',
+      'The #10 fix row is a re-consent, not the copy-from-.claude/settings.local.json that #3 usually is: on this fault the local value is present and wrong, so copying it reinstalls the fault. It sets OAUTH_ACCOUNT first (google_oauth.py refuses a sign-in as any other account, which is the entire protection), and says that a new OAuth client means storing google_client_id and google_client_secret in the same pass — a refresh token is only valid for the client that minted it.',
+      'agents/liangzai.md and liangzai-setup Step 8 now state what liangzai_ping returns and that mailbox_matches: false is a stop condition rather than a warning.',
+    ],
+  },
   {
     version: 'v0.16.0',
     date: 'Sep 8, 2026',
@@ -166,18 +175,6 @@ export const VERSION_HISTORY: Array<{ version: string; date: string; changes: st
       'Exclusions are checked BEFORE inclusions, and Step 6 says why: an "add noodles" side contains the word noodles and defeats any rule that only looks for noodle names. The packaging charge is the highest-volume line in the catalogue and would roughly double the bowl count if it slipped through.',
       'cost-optimizer: "What counts as a bowl" rewritten to point at the rule rather than re-open the classification with the owner, and to note that `monthly` is step 2 of the monthly close, never its own scheduled task — compute_cost_per_bowl reads the reconciliation tab, so firing it independently could publish a plausible-looking cost against a stale or empty basis.',
       'docs/bowls-sold.md (new): how bowls sold per outlet is determined — the two traps in real POS data (one dish, many item_ids; the packaging charge outselling every dish), the rule, the pipeline, the confirmation gate, and what the number is NOT (not "cost per bowl", never grossed up, and not a per-dish cost — the denominator splits by dish but the numerator does not). Written generically, with no figures or names from the live catalogue, since this repo is public.',
-    ],
-  },
-  {
-    version: 'v0.6.0',
-    date: 'Jul 13, 2026',
-    changes: [
-      'The plugin now OWNS the Google and mailer credentials rather than borrowing the gateway\'s. Gateway v0.7.0 accepts them as per-call arguments, so agents/liangzai.md now tells the agent to read GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and SHEETS_REFRESH_TOKEN out of .claude/settings.local.json and send them on every Sheet-touching call — plus GMAIL_REFRESH_TOKEN, SUPPLIER_MAILBOX and SUMMARY_RECIPIENTS on liangzai_send_summary and liangzai_send_run_report. liangzai_ping needs none; liangzai_bowl_checklist reads Loyverse rather than the Sheet, so it needs none either.',
-      'Never omit a credential argument to "let the gateway handle it". The gateway falls back to its own env when an argument is missing, which means a silently-omitted token does not fail loudly — it quietly reads or writes whatever Sheet and mailbox the SERVER is configured for, which may not be the owner\'s. agents/liangzai.md says this in those words.',
-      'setup Step 3i (new): collect SUMMARY_RECIPIENTS from the owner and save it locally. It was previously handed to Five Bucks to set in Vercel and never stored here. It is the allowlist that stands between a bug and an email landing at a supplier — from the mailbox those suppliers write to — so the setup now asks for it explicitly and keeps it to the owner.',
-      'setup Step 3 retitled from "Google access for downloads": downloads are now the minor use of those credentials, since every gateway call carries them.',
-      'plugin-update gained an 8th check (recipient allowlist) and its check #2 widened from "local Google token" to all four Google credentials, since every one of them now travels to the gateway. Its "All six checks" line was also miscounting a seven-row table before this.',
-      'OAuth rewrite (was uncommitted from an earlier session, shipped here): google_oauth.py drops the loopback HTTP server for two commands — --auth-url prints the sign-in link, --exchange "<url>" takes the redirect URL out of the owner\'s address bar. The old flow needed a free port, a browser that could reach it, and a terminal held open for five minutes. The "This site can\'t be reached" page IS the handoff — Google puts the code nowhere but that address bar — and setup Step 3g now warns him of that in advance, because an owner who is not expecting it assumes he broke something and stops.',
     ],
   },
 ];

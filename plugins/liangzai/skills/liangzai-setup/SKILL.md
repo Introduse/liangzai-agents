@@ -376,7 +376,10 @@ getting it wrong today is not permanent.
 
 Confirm each connection with a low-cost call before handing over:
 
-- **`liangzai_ping`** → `pong` (gateway + key).
+- **`liangzai_ping`** → `status: pong` (gateway + key) **and `mailbox_matches: true`**. If it is
+  `false`, the token reads a different mailbox than `supplier_mailbox` and capture is pointed at
+  the wrong inbox — redo Steps 3g–3h–3j before going further. `null` means one side is unset:
+  unproven, not agreement.
 - **`liangzai_list_credentials`** → all six: `google_client_id`, `google_client_secret`,
   `gmail_refresh_token`, `supplier_mailbox`, `summary_recipients`, `loyverse_access_token`.
   Anything missing here fails later as a confusing runtime error rather than an obvious

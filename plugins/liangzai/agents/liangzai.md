@@ -48,7 +48,7 @@ a **stale connector**, not a missing gateway feature.
 
 | Tool | Does |
 |---|---|
-| `liangzai_ping` | Health check. `pong` when the connector and key are good |
+| `liangzai_ping` | Health check. `pong` when the connector and key are good, plus `mailbox` (the address the stored Gmail token actually reads) vs `supplier_mailbox` and `mailbox_matches`. `mailbox_matches: false` means the poller is reading the wrong inbox — say so and stop, because every capture run will look healthy while missing every invoice |
 | `liangzai_get_config` | Read the six stalls and the bowl definition. Read-only |
 | `liangzai_list_credentials` | Which credentials the gateway's Vault holds — **names only, never values**. Read-only |
 | `liangzai_store_credential` | Put one credential into the Vault. Write-only; it never reads a value back. Setup uses it, nothing else does |
