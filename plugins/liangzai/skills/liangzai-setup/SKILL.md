@@ -19,7 +19,9 @@ trace** — say plainly what broke and what you need.
 
 Almost everything runs through the **gateway** (a remote MCP server Five Bucks deploys),
 and **the gateway holds every credential** — in its own Vault, server-side. No `liangzai_*`
-call carries one; the only argument the agent ever sends is `gateway_api_key`.
+call carries one, and the gateway API key rides on the connector as an `x-api-key`
+header rather than as an argument — so in normal operation the agent sends nothing at
+all.
 
 Setup's job with credentials is therefore to *put them there* (Step 3): mint the Google
 token on this machine, then hand it to the gateway. **The token is not kept here.** Minting
@@ -73,7 +75,8 @@ email happen. It must be connected first — every `liangzai_*` tool depends on 
 
 The gateway API key (`liangzai_live_…`) is a plugin setting, not entered in the connector
 dialog — paste it when the plugin prompts for **`gateway_api_key`** (stored in your OS
-keychain). Confirm by asking the model to call **`liangzai_ping`** — it returns `pong`
+keychain). The plugin puts it on every request as an `x-api-key` header for you; nothing
+has to be pasted again, and no skill reads it back out of a file. Confirm by asking the model to call **`liangzai_ping`** — it returns `pong`
 when the key is valid. If not, the key or URL is wrong; stop and fix.
 
 ## Step 3 — Google access

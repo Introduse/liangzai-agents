@@ -28,12 +28,15 @@ Loyverse token all live in Supabase Vault, server-side. **You do not send creden
 any call.** If a credential is missing the gateway says so plainly; the fix is
 `/liangzai-setup`, never an argument you add.
 
-Every gateway tool is named `liangzai_*` and takes **`gateway_api_key` as its first
-argument** — pass the value from the plugin's `gateway_api_key` config on every
-call. (If the connector was added with an `x-api-key` header, the tools accept that
-instead and you can omit the argument.)
+Every gateway tool is named `liangzai_*` and takes `gateway_api_key` as its first
+argument, but **you normally omit it**. The plugin's connector sends the key as an
+`x-api-key` header (`.mcp.json` interpolates `${user_config.gateway_api_key}`), so the
+tools authenticate with no argument from you and there is no key for you to go looking
+for. Supply the argument only if a call comes back with an auth error — that means the
+header did not reach the gateway, and `/liangzai-setup` is the fix, not a value you hunt
+down in a settings file.
 
-That key is the only thing you send. If a tool still shows `spreadsheet_id`,
+You send nothing else. If a tool still shows `spreadsheet_id`,
 `sheets_refresh_token` or the other credential arguments in its schema, your connector is
 **stale** — reconnect it rather than filling them in.
 

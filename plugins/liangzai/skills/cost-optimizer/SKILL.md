@@ -16,9 +16,9 @@ use_for: "Weekly: record Loyverse sales per outlet per day — revenue and per-i
 Cost per bowl is the number the owner does not have today and the one he will actually
 look at. Everything here exists to make sure it is *right*, or absent.
 
-Pass the plugin's `gateway_api_key` on every `liangzai_*` call. **That is the only
-argument you supply** — the gateway holds its own Google, mailbox and Loyverse credentials
-server-side. If a `liangzai_*` call comes back `unknown tool`, or a tool's schema still
+You supply **no arguments of your own** on a `liangzai_*` call. The connector sends the
+gateway API key as an `x-api-key` header, and the gateway holds its own Google, mailbox
+and Loyverse credentials server-side. If a `liangzai_*` call comes back `unknown tool`, or a tool's schema still
 shows `spreadsheet_id` or `sheets_refresh_token`, the connector has cached an old tool
 list — **reconnect it**, and never report it as a missing gateway feature. `/plugin-update`
 checks exactly this.

@@ -2,7 +2,10 @@
   "mcpServers": {
     "gateway": {
       "type": "http",
-      "url": "https://app.liangzaiprawnnoodle.com/api/mcp"
+      "url": "https://app.liangzaiprawnnoodle.com/api/mcp",
+      "headers": {
+        "x-api-key": "${user_config.gateway_api_key}"
+      }
     }
   }
 }

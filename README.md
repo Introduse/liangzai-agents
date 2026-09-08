@@ -101,6 +101,9 @@ plugins/liangzai/
 
 1. Add this repo as a plugin marketplace in Claude, then install the **liangzai** plugin.
 2. Paste the gateway API key (`liangzai_live_…`) when prompted for `gateway_api_key`.
+   The plugin sends it on every request as an `x-api-key` header, so it is entered once
+   and never pasted into a call, a transcript or a settings file. To change it later,
+   update the plugin's `gateway_api_key` setting.
 3. Run **`/liangzai-setup`** and follow it end to end — it walks through the gateway
    connector, Google access, storing the credentials in the gateway's Vault, the bowl
    definition, and the workspace `CLAUDE.md`.

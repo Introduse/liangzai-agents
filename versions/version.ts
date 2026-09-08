@@ -1,8 +1,8 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.15.2';
-const DEFAULT_DATE = 'Aug 5, 2026';
+const DEFAULT_VERSION = 'v0.16.0';
+const DEFAULT_DATE = 'Sep 8, 2026';
 
 // Export constants initially with default values
 export const APP_VERSION = DEFAULT_VERSION;
@@ -11,6 +11,14 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.16.0',
+    date: 'Sep 8, 2026',
+    changes: [
+      'THE GATEWAY API KEY NOW TRAVELS AS A HEADER, AND THE AGENT STOPS HUNTING FOR IT. .mcp.json gained a headers block sending `x-api-key: ${user_config.gateway_api_key}` — the interpolation Claude Code supports for http MCP servers, and the path lib/auth.ts and lib/tools/liangzai.ts headerKey() have accepted on the gateway since the beginning. Until now nothing sent it, so every call depended on the agent finding the key itself; when it could not, a scheduled month-end close failed with "no API key" and the owner had to paste the key into chat to get the run to finish. A cron run has nobody there to do that. The key is entered once at install and never read back out of a file.',
+      'agents/liangzai.md, both workflow skills, liangzai-setup, plugin.json and README now say the connector carries the key and the agent normally sends no arguments at all. The old instruction — "pass the plugin gateway_api_key on every call" — was what sent the agent looking through settings.local.json for a value that does not live there.',
+    ],
+  },
   {
     version: 'v0.15.2',
     date: 'Aug 5, 2026',
@@ -170,28 +178,6 @@ export const VERSION_HISTORY: Array<{ version: string; date: string; changes: st
       'setup Step 3 retitled from "Google access for downloads": downloads are now the minor use of those credentials, since every gateway call carries them.',
       'plugin-update gained an 8th check (recipient allowlist) and its check #2 widened from "local Google token" to all four Google credentials, since every one of them now travels to the gateway. Its "All six checks" line was also miscounting a seven-row table before this.',
       'OAuth rewrite (was uncommitted from an earlier session, shipped here): google_oauth.py drops the loopback HTTP server for two commands — --auth-url prints the sign-in link, --exchange "<url>" takes the redirect URL out of the owner\'s address bar. The old flow needed a free port, a browser that could reach it, and a terminal held open for five minutes. The "This site can\'t be reached" page IS the handoff — Google puts the code nowhere but that address bar — and setup Step 3g now warns him of that in advance, because an owner who is not expecting it assumes he broke something and stops.',
-    ],
-  },
-  {
-    version: 'v0.5.1',
-    date: 'Jul 13, 2026',
-    changes: [
-      'Setup Step 2 now gives the gateway URL literally (https://liangzai-gateway.vercel.app/api/mcp) instead of "the liangzai gateway address (ends in /api/mcp)". The address is fixed and already committed in .mcp.json, so the vague wording was a blank the owner — a hawker operator, not an engineer — had no way to fill in, and Step 2 blocks every later step.',
-    ],
-  },
-  {
-    version: 'v0.5.0',
-    date: 'Jul 13, 2026',
-    changes: [
-      'Setup Step 10 is now an interview, not a hard-coded table. It asks the owner which weekday/time he wants the weekly capture and which day-of-month/time he wants the monthly close, records the answer with liangzai_set_schedule, and only then walks him through creating the two Cowork tasks. It refuses a monthly day below 5 (SOAs land by the 4th — reconciling earlier checks invoices against statements that have not arrived) and above 28 (no such day in February).',
-      'The monthly close is scheduled DAILY with a date guard on the first line of the prompt, because Cowork\'s frequency picker has no monthly option — only hourly, daily, weekly, weekdays, manual. The guard exits immediately on the other ~29 days. Removing it would run the close every single day.',
-      'Every scheduled run now emails the owner via liangzai_send_run_report, including the runs with nothing to report. Cowork tasks only fire while his machine is on, and Loyverse serves only 30 days of receipts, so a weekly capture that silently stops destroys that month\'s sales data — and a clean run looks exactly like a dead one from the outside. Step 10 tells him, in his words, that a missing email means something is wrong.',
-      'Cost-per-bowl is documented as step 2 of the monthly close and never its own scheduled task: it reads the reconciliation tab, so firing it independently could publish a plausible-looking cost against a stale or empty basis.',
-      'plugin-update gained a 6th check — Schedule — off the same single liangzai_get_config call. Any install predating this version has no schedule recorded and will now say so.',
-      'FIXED: setup Step 9a read the plugin version from versions/version.ts, which sits OUTSIDE plugins/liangzai/ and therefore never ships with the installed plugin — so the CLAUDE.md marker was always stamped "unknown" and plugin-update could never detect a stale embed. It now reads .claude-plugin/plugin.json, the only version file that installs.',
-      'FIXED version drift: plugin.json and marketplace.json were still on 0.4.0 while version.ts said v0.4.2, because the commit process only ever bumped version.ts. All three now move together, and workflow/commit-to-git.md says so.',
-      'agents/liangzai.md tool table was missing liangzai_get_config entirely; added it plus liangzai_set_schedule and liangzai_send_run_report.',
-      'Requires gateway v0.6.0 for liangzai_set_schedule, liangzai_send_run_report, and schedule in liangzai_get_config.',
     ],
   },
 ];
