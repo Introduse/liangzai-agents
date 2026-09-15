@@ -1,6 +1,6 @@
 # Liang Zai — agents
 
-A **Claude plugin** for Liang Zai Kitchen's back-office: capture supplier invoices and
+A **Claude plugin** for Liang Zai Prawn Noodle's back-office: capture supplier invoices and
 Loyverse sales, reconcile each month's Statements of Account line-by-line, and track supplier
 cost per bowl. The skills run inside the owner's own Claude Cowork project and drive the
 private [liangzai-gateway](https://github.com/Introduse/liangzai-gateway) MCP server, which
@@ -75,8 +75,9 @@ workspace `CLAUDE.md` so every session — including scheduled runs — auto-loa
 - **Any variance flags.** `Matched` requires the variance to be exactly zero (compared as
   integer cents, so float noise never manufactures a phantom variance). A missing statement
   is `SOA_MISSING`, never agreement.
-- **Never guess.** An unresolved supplier or an ambiguous outlet becomes `needs_review` — a
-  mis-attributed outlet corrupts that outlet's cost-per-bowl while the totals still reconcile.
+- **Never guess.** An unresolved supplier or an ambiguous outlet becomes `needs_review`; the
+  Owner or GM routes it once in the app, and it routes itself after that. A mis-attributed
+  outlet corrupts that outlet's cost-per-bowl while the totals still reconcile.
 - **The owner owns approval.** The agent sets a default payment status once and preserves his
   choice on every re-run; it can never set `Paid`.
 - **Cost per bowl is honest.** It covers only the tracked (automated) suppliers, names them

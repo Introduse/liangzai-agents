@@ -1,8 +1,8 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.17.0';
-const DEFAULT_DATE = 'Sep 8, 2026';
+const DEFAULT_VERSION = 'v0.18.0';
+const DEFAULT_DATE = 'Sep 15, 2026';
 
 // Export constants initially with default values
 export const APP_VERSION = DEFAULT_VERSION;
@@ -11,6 +11,17 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.18.0',
+    date: 'Sep 15, 2026',
+    changes: [
+      'AN UNRESOLVED OUTLET IS THE OWNER\'S OR GM\'S TO ROUTE, NEVER FIVE BUCKS\'. Gateway v0.48.0 moves invoice → outlet routing out of config/outlet_rules.json, which only Five Bucks could change with a redeploy, into routing rules saved in the database: when the Owner or GM assigns an outlet in the web app\'s Invoices → Needs review queue, a rule (supplier + address text, e.g. a postal code) is saved by default and that supplier and address route themselves from then on. The trigger: an AAS invoice billed to head office\'s registered address matched nothing, and the agent told the owner to "ask Five Bucks" — the old fix path, to a question he can now answer himself.',
+      'agents/liangzai.md "Never guess an outlet" and supplier-invoice-manager capture step 6 now give that fix path in those words, say the agent cannot set routing (there is no rule tool — it cannot create, change or list one), say that an assigned supplier and address coming back unresolved means the rule was removed, and name head office (总部 HQ) as a valid outlet: a software or subscription invoice billed to head office is a real HQ invoice on a company cost line, not not_an_invoice. README\'s "Never guess" guarantee says the Owner or GM routes it once in the app.',
+      'supplier-invoice-manager reports routed_by for every invoice — { rule_id, level, match_text } or null, in both the dry-run preview and the written result of liangzai_append_invoice_log (statements do not carry it). Gateway v0.48.0 is required for it; an older gateway omits the field.',
+      'Two new tests in OutletRouting, each mutation-checked. No prose sends the user to Five Bucks about routing, addresses, aliases or delivery — scanned per SENTENCE, because plugin-update check #10 puts "tell", a Five Bucks mailbox and an address in one paragraph and means none of them together, and exempted only when a negation directly governs the verb, so "if an outlet will not resolve, ask Five Bucks" cannot excuse itself on its own "not". And no prose says the agent can create, set or change a routing rule, while "you cannot set routing" still passes.',
+      'THE BUSINESS IS 靓仔大虾面 · LIANG ZAI PRAWN NOODLE, AND THE CONSISTENCY TEST HAD IT BACKWARDS. test_business_name_is_consistent required "Liang Zai Kitchen" and failed on "Liang Zai Prawn Noodle" — the name of the sister restaurant (靓仔私房菜, mala/hotpot at 535 Kallang Bahru), which the gateway reverted in v0.24.2. README, the marketplace description and the agent description now say Prawn Noodle, and the test now fails on "Liang Zai Kitchen" or 靓仔私房菜 in any prose (mutation-checked). The supplier mailbox ai@liangzaikitchen.com is a real address and is untouched.',
+    ],
+  },
   {
     version: 'v0.17.0',
     date: 'Sep 8, 2026',
@@ -164,17 +175,6 @@ export const VERSION_HISTORY: Array<{ version: string; date: string; changes: st
       'FIXED in the setup preamble: it still claimed the gateway holds the Google credentials. Since v0.6.0 they are this machine\'s, in .claude/settings.local.json, and travel with every call; the gateway holds only the Loyverse token and the spreadsheet id.',
       'plugin-update stale cross-references cleaned up: its notes still said "#4, #5 and #6 are one get_config call" after #6 became the Cowork check, and its bowl-definition fill row still told the agent to re-open the classification with the owner, which v0.7.0 had deliberately removed.',
       'Requires gateway v0.9.0.',
-    ],
-  },
-  {
-    version: 'v0.7.0',
-    date: 'Jul 13, 2026',
-    changes: [
-      'Setup Step 6 no longer interrogates the owner about what a bowl is. He sells noodles; he does not think in taxonomies, and asking him to rule on whether a side dish counts as "a bowl" invents a decision he never had. The rule is now HARDCODED in the skill — a meal is a bowl; packaging, drinks, à la carte add-ons, sides, staff meals and fee lines are not — and the agent applies it and shows him the finished classification once. He can correct it in a sentence; that is the only input he gives.',
-      'Step 6 now classifies DISHES and submits every item_id behind each one (needs gateway v0.8.0, which groups the checklist by dish). The same bowl of noodles is a different Loyverse item_id at each of the six stalls and is spelled differently too, so ticking a dish but submitting one stall\'s id makes that outlet\'s bowls vanish from the denominator forever — and its cost per bowl then reads too high while looking perfectly reasonable. The skill says this in those words.',
-      'Exclusions are checked BEFORE inclusions, and Step 6 says why: an "add noodles" side contains the word noodles and defeats any rule that only looks for noodle names. The packaging charge is the highest-volume line in the catalogue and would roughly double the bowl count if it slipped through.',
-      'cost-optimizer: "What counts as a bowl" rewritten to point at the rule rather than re-open the classification with the owner, and to note that `monthly` is step 2 of the monthly close, never its own scheduled task — compute_cost_per_bowl reads the reconciliation tab, so firing it independently could publish a plausible-looking cost against a stale or empty basis.',
-      'docs/bowls-sold.md (new): how bowls sold per outlet is determined — the two traps in real POS data (one dish, many item_ids; the packaging charge outselling every dish), the rule, the pipeline, the confirmation gate, and what the number is NOT (not "cost per bowl", never grossed up, and not a per-dish cost — the denominator splits by dish but the numerator does not). Written generically, with no figures or names from the live catalogue, since this repo is public.',
     ],
   },
 ];

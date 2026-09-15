@@ -21,6 +21,8 @@ head across nine files:
     some shipped script actually reads
   * a document that is neither an invoice nor a statement gets closed with a
     tool, not merely mentioned in a report
+  * an unresolved outlet goes to the Owner or GM, never to Five Bucks, and no
+    prose claims the agent can write a routing rule
   * the three version fields move together
   * cross-references between skills point at steps that exist
 
@@ -336,6 +338,93 @@ class DocumentDisposal(unittest.TestCase):
         )
 
 
+def sentences(path: Path):
+    """Every sentence in a file, with line wraps collapsed.
+
+    Per SENTENCE, not per line: an instruction wraps, so "ask Five Bucks to register"
+    and "the delivery address" routinely land on different lines. Per sentence rather
+    than per paragraph, because plugin-update's check #10 names a Five Bucks mailbox,
+    an address and the word "tell" in one paragraph and means none of them together.
+    """
+    for para in re.split(r"\n\s*\n", read(path)):
+        flat = " ".join(para.split())
+        yield from (s for s in re.split(r"(?<=[.!?])\s+", flat) if s)
+
+
+class OutletRouting(unittest.TestCase):
+    """Routing an invoice to an outlet belongs to the Owner and GM, in the app.
+
+    It used to be config/outlet_rules.json, which only Five Bucks could change with a
+    redeploy. Gateway v0.48.0 moved it into routing rules the Owner or GM saves by
+    assigning an outlet in the Invoices review queue. Then an AAS invoice billed to head
+    office matched nothing and the agent told the owner to "ask Five Bucks" — the old
+    fix path, to a question he can now answer himself in one click.
+    """
+
+    FIVE_BUCKS = r"(?:Five\s*Bucks|FBV)"
+
+    # Someone is sent to Five Bucks: "ask/contact/tell/email … Five Bucks", or Five
+    # Bucks named as the one who adds/registers/changes something.
+    ESCALATION = re.compile(
+        r"(?:\b(?:ask|contact|tell|email|message|report(?:\s+it)?\s+to|reach\s+out\s+to|"
+        r"escalate(?:\s+it)?\s+to|check\s+with|get|have)\b|联系|询问)"
+        r"\s*(?:\w+\s+){0,2}?" + FIVE_BUCKS
+        + r"|" + FIVE_BUCKS
+        + r"\s+(?:\w+\s+){0,3}?(?:add|register|update|change|fix|edit|set|map)s?\b",
+        re.I,
+    )
+    ROUTING_TOPIC = re.compile(
+        r"\b(?:routing|routed?|outlets?|address(?:es)?|alias(?:es)?|deliver(?:y|ies)|"
+        r"outlet_rules)\b",
+        re.I,
+    )
+    # "never tell them to contact Five Bucks" is the fix, not the defect. The negation
+    # must govern the verb — at most three words before it, no punctuation between —
+    # or "if an outlet will not resolve, ask Five Bucks" would excuse itself.
+    NEGATED = re.compile(r"(?:\b(?:never|not|no longer|stop)|n't)\s+(?:[\w*]+\s+){0,3}$", re.I)
+
+    # The agent credited with a routing write. There is no rule tool, so any sentence
+    # putting "you" or "the agent" in front of create/set/change … routing is a promise
+    # it cannot keep. "You cannot set routing" does not match: the modal slot admits
+    # only affirmative words, so a negation breaks the chain between subject and verb.
+    AGENT_SETS_ROUTING = re.compile(
+        r"\b(?:you|the agent|claude)\s+"
+        r"(?:(?:can|could|may|will|should|must|then|also|now|just|simply)\s+){0,2}"
+        r"(?:create|set|change|add|edit|update|write|save|delete|remove|make)s?\b"
+        r"[^.|]{0,40}?\b(?:routing|outlet rules?)\b"
+        r"|\b(?:call|use)\s+`?liangzai_\w+`?\s+to\s+(?:create|set|change|add)\b"
+        r"[^.|]{0,40}?\brouting\b",
+        re.I,
+    )
+
+    def test_no_prose_sends_the_owner_to_five_bucks_about_routing(self):
+        for path in PROSE:
+            for sentence in sentences(path):
+                if not self.ROUTING_TOPIC.search(sentence):
+                    continue
+                for m in self.ESCALATION.finditer(sentence):
+                    if self.NEGATED.search(sentence[: m.start()]):
+                        continue
+                    self.fail(
+                        f"\n{rel(path)} sends the user to Five Bucks about outlet "
+                        "routing. The Owner or GM assigns the outlet once in the "
+                        "Invoices review queue and a routing rule is saved — nobody "
+                        f"needs Five Bucks for it.\n  {sentence[:300]}"
+                    )
+
+    def test_no_prose_says_the_agent_can_write_a_routing_rule(self):
+        for path in PROSE:
+            for sentence in sentences(path):
+                m = self.AGENT_SETS_ROUTING.search(sentence)
+                if m:
+                    self.fail(
+                        f"\n{rel(path)} says the agent can write routing: "
+                        f"{m.group(0)!r}. No gateway tool creates, changes or lists a "
+                        "routing rule; only the Owner or GM can, in the app."
+                        f"\n  {sentence[:300]}"
+                    )
+
+
 class RetiredVocabulary(unittest.TestCase):
     """The Sheet era left vocabulary behind. It must not read as current."""
 
@@ -497,14 +586,23 @@ class Manifests(unittest.TestCase):
                 )
 
     def test_business_name_is_consistent(self):
-        """Six stalls trade as 靓仔大虾面; the business is Liang Zai Kitchen."""
+        """The business is 靓仔大虾面 · Liang Zai Prawn Noodle.
+
+        Liang Zai Kitchen (靓仔私房菜) is a SISTER restaurant — mala/hotpot at 535 Kallang
+        Bahru — not this business. The gateway carried that name for three days in July
+        2026 by mistake and reverted it (v0.24.2). The supplier mailbox
+        ai@liangzaikitchen.com is a real address and is not a brand reference, so only the
+        brand phrases are checked.
+        """
         for path in PROSE:
-            self.assertNotIn(
-                "Liang Zai Prawn Noodle",
-                read(path),
-                f"\n{rel(path)} says 'Liang Zai Prawn Noodle'. The business is "
-                "Liang Zai Kitchen (靓仔私房菜).",
-            )
+            text = read(path)
+            for wrong in ("Liang Zai Kitchen", "靓仔私房菜"):
+                self.assertNotIn(
+                    wrong,
+                    text,
+                    f"\n{rel(path)} says '{wrong}'. That is the sister restaurant; this "
+                    "business is 靓仔大虾面 · Liang Zai Prawn Noodle.",
+                )
 
 
 if __name__ == "__main__":

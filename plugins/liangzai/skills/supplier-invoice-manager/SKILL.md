@@ -209,6 +209,28 @@ the lines anyway with `needs_review` and the arithmetic in the reason. Outlets a
 canonicalised — an unresolved one is stored with no outlet, marked `needs_review`, with the
 printed delivery text kept as evidence, **never a guess**.
 
+**An unresolved outlet has one fix, and it is not Five Bucks.** The Owner or GM assigns the
+outlet in the web app's Invoices → Needs review queue; a routing rule (supplier + address
+text, e.g. a postal code) is saved by default, and the same supplier and address route
+themselves on every later invoice. Put it to them in those words. **Never tell them to
+contact Five Bucks** — routing used to be a config file only an engineer could change, and
+it is not any more. **You cannot set routing**: no tool creates, changes or lists a rule.
+If a supplier and address that were already assigned come back unresolved, the rule was
+removed — say so rather than presenting it as new.
+
+**Head office (总部 HQ) is an outlet.** An invoice billed to head office's registered
+address — typically software or a subscription, with no delivery at all — is a real HQ
+invoice and lands on a company cost line. Extract and append it like any other; it is
+**not** `not_an_invoice`. The incident that prompted this: a software invoice billed to
+head office matched no rule, and the owner was pointed at Five Bucks instead of the review
+queue. That is the answer this section exists to stop.
+
+**Report `routed_by` for every invoice.** The `dry_run` `preview` entries and the written
+result's `routed` list carry `routed_by: { rule_id, level, match_text }` per invoice, or `null` when no rule
+routed it. Say which rule routed each one (its `match_text`), and name the ones none did —
+those are the invoices waiting on the Owner or GM. (Gateway v0.48.0 or later; an older
+gateway omits the field.)
+
 Two more things it now refuses to accept quietly: the same `invoice_no` from the same
 supplier twice, and — where an invoice carries no number — a near-match on the same
 supplier, date and total. Both go to `needs_review` rather than being silently accepted or
