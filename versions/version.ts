@@ -1,8 +1,8 @@
 // Version information (production)
 // Keep in lockstep with plugins/liangzai/.claude-plugin/plugin.json and
 // .claude-plugin/marketplace.json — the skills read the manifest, not this file.
-const DEFAULT_VERSION = 'v0.18.0';
-const DEFAULT_DATE = 'Sep 15, 2026';
+const DEFAULT_VERSION = 'v0.19.0';
+const DEFAULT_DATE = 'Sep 22, 2026';
 
 // Export constants initially with default values
 export const APP_VERSION = DEFAULT_VERSION;
@@ -11,6 +11,13 @@ export const RELEASE_DATE = DEFAULT_DATE;
 // NOTE: Keep only last 15 versions to prevent git overload (following Next.js pattern)
 // Full history available in GitHub releases and git commits
 export const VERSION_HISTORY: Array<{ version: string; date: string; changes: string[] }> = [
+  {
+    version: 'v0.19.0',
+    date: 'Sep 22, 2026',
+    changes: [
+      'COST PER BOWL NEVER REPORTS A MONTH NOBODY RECONCILED. The 6 Sep 2026 close ran before any July or August invoice had been logged, so reconciliation wrote nothing, and the old gateway published $0.00 per bowl, "clean", for all six outlets while the summary said "Everything matched · 0 Matched". The ordering rule (reconcile, then cost per bowl, one task) could not catch it: reconciliation had run, it just had nothing in it. Gateway v0.54.0 now refuses with reconciliation_missing when no outlet has reconciled cost above $0.00, and lists outlets with bowls but no reconciled cost in withheld. cost-optimizer monthly mode says what to do with both: stop the cost-per-bowl step, say so in needs-owner, never retry in the same run, never report a figure, and name each withheld outlet.',
+    ],
+  },
   {
     version: 'v0.18.0',
     date: 'Sep 15, 2026',
@@ -161,20 +168,6 @@ export const VERSION_HISTORY: Array<{ version: string; date: string; changes: st
       'agents/liangzai.md: liangzai_bowl_checklist now WRITES (it saves the ref→id map to agent_config) and returns refs; liangzai_set_bowl_definition takes bowl_refs. The doc has always said "the owner never sees an id" — this is what finally makes it true of the model as well.',
       'docs/bowls-sold.md: the pipeline section rewritten for refs, including WHY the ref map is a snapshot and never recomputed on confirm — the 30-day window rolls, receipts land between the checklist and the confirmation, and a re-derived ref could resolve to a different set of ids than the one that was agreed to. Still free of live figures; the repo is public.',
       'Requires gateway v0.10.0. The tool schemas changed, so the connector must be reconnected — exactly the stale-connector case plugin-update check #2 catches.',
-    ],
-  },
-  {
-    version: 'v0.8.0',
-    date: 'Jul 13, 2026',
-    changes: [
-      'Scheduling now uses Cowork\'s OWN scheduled-task system. Setup Step 10 invokes /schedule rather than reading UI instructions aloud, and nothing records the cadence anywhere else. Gateway v0.9.0 dropped liangzai_set_schedule to match: Cowork owns the schedule, fires the jobs and lists them, so a copy in the Sheet was a second source of truth that went stale the first time he edited a task — and a stale copy that is written down looks authoritative.',
-      'plugin-update gained a STALE-CONNECTOR check (#2), which is what prompted all of this. A connected client reported liangzai_set_schedule as "missing from the gateway" and concluded it was a gateway gap — but the gateway was advertising it fine; the connector had cached an old tool list. The check now compares the tools you can actually see against the table in agents/liangzai.md, and says plainly: a missing tool means RECONNECT THE CONNECTOR, not change the gateway. Without it, a cached tool list sends someone to fix code that is already correct.',
-      'plugin-update check #7 (scheduled tasks) is answered by looking at Cowork\'s Scheduled page — no gateway tool can answer it, and the skill says so rather than inviting the agent to hunt for one.',
-      'FIXED in agents/liangzai.md: the credential table said liangzai_bowl_checklist needs no credentials because it "reads Loyverse rather than the Sheet". It does read the Sheet — agent_config, to label each item with the outlet that sold it — so omitting them made the gateway fall back to the SERVER\'s Sheet. liangzai_ping is now correctly the only tool needing none. (Gateway v0.9.0 carries the matching fix.)',
-      'FIXED in setup Step 3e: it still described the OAuth loopback server ("hands the code back to a tiny local server on that port") after v0.6.0 replaced it with the paste-back flow. It now says nothing is listening on 5179, and that the page failing to load IS the handoff — the one thing an owner will otherwise read as failure.',
-      'FIXED in the setup preamble: it still claimed the gateway holds the Google credentials. Since v0.6.0 they are this machine\'s, in .claude/settings.local.json, and travel with every call; the gateway holds only the Loyverse token and the spreadsheet id.',
-      'plugin-update stale cross-references cleaned up: its notes still said "#4, #5 and #6 are one get_config call" after #6 became the Cowork check, and its bowl-definition fill row still told the agent to re-open the classification with the owner, which v0.7.0 had deliberately removed.',
-      'Requires gateway v0.9.0.',
     ],
   },
 ];

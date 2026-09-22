@@ -104,6 +104,18 @@ Loyverse.** Two honesty rules it enforces:
 - **A flagged reconciliation means the cost basis is not final.** The row is still
   written, but `cost_basis_note` names the unresolved suppliers.
 
+If it returns a **`reconciliation_missing`** error, nothing was reconciled for that month (or
+the reconciliation logged $0.00), so there is no cost to divide. **Stop the cost-per-bowl step and say so** in the summary's
+needs-owner section: "cost per bowl for <month> not calculated — nothing was reconciled".
+Never retry it in the same run, and never report a figure. This is exactly what happened
+on 6 Sep 2026: the close ran before any July or August invoice had been logged,
+reconciliation wrote nothing, and the old gateway published **$0.00 per bowl, "clean"**, for
+all six outlets. Gateway v0.54.0 refuses instead.
+
+Any outlets listed in **`withheld`** had bowls but no reconciled cost of their own. They get
+no figure (and any old one is removed). Name them in the report: "no reconciled supplier
+cost for <outlet> this month".
+
 If it returns a `bowl_definition_unconfirmed` error, the definition has not been
 confirmed yet — run `/liangzai-setup` Step 6, don't work around it.
 
